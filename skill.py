@@ -19,16 +19,19 @@ class StockAnalysisSkill:
         try:
             df = get_price_data(symbol)
             trend = get_trend(df)
+            indicators = get_trend_detail(df)
             fund_total, fund_detail = get_fund_flow(symbol)
             basic = get_basic_info(symbol)
             basic_score, basic_reasons = get_basic_score(basic)
-            score = get_score(trend, fund_total, basic_score)
+            score = get_score(trend, fund_total, basic_score, indicators)
             signal = get_signal(score)
-            
+
+            # Add fund flow info to result
             result = {
                 "stock": symbol,
                 "trend": trend,
-                "fund_flow_proxy": round(float(fund_total), 2),
+                "main_force_net_inflow_5d": round(float(fund_total), 0),
+                "main_force_today": round(float(fund_detail.get('main_force_today', 0)), 0),
                 "basic_score": basic_score,
                 "total_score": score,
                 "signal": signal,
