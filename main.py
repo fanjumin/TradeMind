@@ -6,6 +6,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from skill import StockAnalysisSkill
 from report import generate_report
+from backtest import run_backtest, format_backtest_report
+from data.price import get_price_data, get_latest_price
+from analysis.technical import get_trend_detail
+from predict import predict_price, format_prediction_report
+from alerts import AlertEngine, generate_alert_report
 
 
 def main():
@@ -18,6 +23,12 @@ def main():
         print("  python main.py --market          Market overview (all major indices)")
         print("  python main.py --sectors [N]     Top N sector ranking (default: 10)")
         print("  python main.py --report <symbol> Full analysis report")
+        print("  python main.py --backtest <sym>  Backtest strategies (ma_cross/rsi/kdj)")
+        print("  python main.py --backtest <sym> <strat>  Specific strategy")
+        print("  python main.py --predict <sym>   AI price prediction (5-day)")
+        print("  python main.py --alerts          List configured alerts")
+        print("  python main.py --alert-add <sym> <type> <threshold>")
+        print("  python main.py --alert-check <sym>  Check alerts for a stock")
         return
     
     cmd = sys.argv[1]
@@ -35,6 +46,75 @@ def main():
             return
         report = generate_report(sys.argv[2])
         print(report)
+    elif cmd == '--backtest':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --backtest <symbol> [strategy]")
+            print("Strategies: ma_cross, rsi, kdj, ma_rsi_combined (default: all)")
+            return
+        symbol = sys.argv[2]
+        df = get_price_data(symbol, datalen=200)
+        capital = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 1000000
+        
+        if len(sys.argv) > 3 and not sys.argv[3].isdigit():
+            strategies = [sys.argv[3]]
+        else:
+            strategies = ['ma_cross', 'rsi', 'kdj']
+        
+        for strat in strategies:
+            result = run_backtest(df, strategy_name=strat, symbol=symbol, initial_capital=capital)
+            print(format_backtest_report(result))
+            print()
+    elif cmd == '--predict':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --predict <symbol>")
+            return
+        symbol = sys.argv[2]
+        df = get_price_data(symbol, datalen=100)
+        result = predict_price(df, horizon=5)
+        print(format_prediction_report(result))
+
+    elif cmd == '--alerts':
+        engine = AlertEngine()
+        if len(sys.argv) > 2:
+            sub = sys.argv[2]
+            if sub == 'add' and len(sys.argv) >= 6:
+                engine.add_alert(sys.argv[3], sys.argv[4], float(sys.argv[5]))
+                print(f"Alert added: {sys.argv[3]} {sys.argv[4]} {sys.argv[5]}")
+            elif sub == 'check' and len(sys.argv) >= 4:
+                symbol = sys.argv[3]
+                info = get_latest_price(symbol)
+                df = get_price_data(symbol, datalen=60)
+                indicators = get_trend_detail(df) if not df.empty else {}
+                price = info['price'] if info else 0
+                triggered = engine.check_alerts(symbol, price, indicators)
+                print(generate_alert_report(symbol, price, indicators, triggered))
+            else:
+                print(engine.list_alerts())
+        else:
+            print(engine.list_alerts())
+
+    elif cmd == '--alert-add':
+        if len(sys.argv) < 5:
+            print("Usage: python main.py --alert-add <symbol> <type> <threshold>")
+            print("Types: price_above, price_below, rsi_oversold, rsi_overbought, volume_surge")
+            return
+        engine = AlertEngine()
+        engine.add_alert(sys.argv[2], sys.argv[3], float(sys.argv[4]))
+        print(f"Alert added: {sys.argv[2]} {sys.argv[3]} {sys.argv[4]}")
+
+    elif cmd == '--alert-check':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --alert-check <symbol>")
+            return
+        engine = AlertEngine()
+        symbol = sys.argv[2]
+        info = get_latest_price(symbol)
+        df = get_price_data(symbol, datalen=60)
+        indicators = get_trend_detail(df) if not df.empty else {}
+        price = info['price'] if info else 0
+        triggered = engine.check_alerts(symbol, price, indicators)
+        print(generate_alert_report(symbol, price, indicators, triggered))
+
     else:
         result = skill.analyze_stock(cmd)
         print(result)
