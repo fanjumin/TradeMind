@@ -30,6 +30,7 @@ from alerts import (
 )
 from data.news import get_stock_news
 from analysis.sentiment import analyze_news, get_sentiment_for_stock
+from analysis.sentiment_llm import SentimentLearnedStore
 from analysis.llm_advisor import analyze_report as llm_analyze
 
 
@@ -62,7 +63,9 @@ def print_usage():
     print("")
     print("Other:")
     print("  python main.py --predict <sym>       AI price prediction (5-day)")
-    print("  python main.py --sentiment <sym>     News sentiment analysis")
+    print("  python main.py --sentiment <sym>     News sentiment (dictionary-based)")
+    print("  python main.py --sentiment-llm <sym> LLM-powered sentiment (API + local cache)")
+    print("  python main.py --sentiment-learned     Show learned sentiment store stats")
     print("  python main.py --chart <sym>         Interactive K-line chart (Plotly)")
     print("  python main.py --indicators <sym>    All 25+ technical indicators")
     print("  python main.py --ask <sym>           LLM AI analysis (DeepSeek)")
@@ -292,6 +295,37 @@ def main():
         print(llm_analyze(symbol))
 
     # ── Sentiment ──
+    elif cmd == '--sentiment-llm':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --sentiment-llm <symbol>")
+            print("  Uses DeepSeek LLM API for nuanced sentiment analysis")
+            print("  Results are cached locally -> reduces future API costs")
+            return
+        symbol = sys.argv[2].upper()
+        force = '--no-cache' in sys.argv
+        print(f"LLM Sentiment Analysis for {symbol}...")
+        try:
+            result = get_sentiment_for_stock(symbol, use_llm=True, use_cache=not force)
+            print_llm_sentiment(result)
+        except Exception as e:
+            print(f"  LLM Error: {e}")
+            print("  Falling back to dictionary-based analysis...")
+            result = get_sentiment_for_stock(symbol, use_llm=False)
+
+    elif cmd == '--sentiment-learned':
+        store = SentimentLearnedStore()
+        stats = store.stats()
+        print("=" * 50)
+        print("  Sentiment Learning Store")
+        print("=" * 50)
+        print(f"  Total learned: {stats['total_learned']}")
+        print(f"    Bullish:  {stats['bullish']}")
+        print(f"    Bearish:  {stats['bearish']}")
+        print(f"    Neutral:  {stats['neutral']}")
+        print(f"  Models used: {stats['models_used']}")
+        print(f"  Store: {stats['store_path']}")
+        print("=" * 50)
+
     elif cmd == '--sentiment':
         if len(sys.argv) < 3:
             print("Usage: python main.py --sentiment <symbol>")
@@ -336,6 +370,45 @@ def main():
         result = skill.analyze_stock(cmd)
         print(result)
 
+
+def print_llm_sentiment(result):
+    """Pretty-print LLM sentiment results."""
+    ss = result.get('stock_sentiment', {})
+    print()
+    print("=" * 60)
+    print(f"  LLM Sentiment Analysis: {result.get('symbol', '?')}")
+    print("=" * 60)
+    source = "🧠 LLM" if result.get('llm_used') else "📖 Dictionary (fallback)"
+    emoji = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(
+        ss.get('overall_label', 'neutral'), '⚪')
+    label_cn = {'bullish': '看多', 'neutral': '中性', 'bearish': '看空'}.get(
+        ss.get('overall_label', ''), '?')
+    print(f"  Source:   {source}")
+    print(f"  Overall:  {emoji} {ss.get('overall_score', 0):+.3f} ({label_cn})")
+    print(f"  Articles: {ss.get('article_count', 0)} "
+          f"(bullish:{ss.get('bullish_count',0)} "
+          f"neutral:{ss.get('neutral_count',0)} "
+          f"bearish:{ss.get('bearish_count',0)})")
+    print(f"  Trend:    {ss.get('sentiment_trend', 'stable')}")
+    if result.get('api_calls', 0) > 0:
+        print(f"  API:      {result['api_calls']} calls, {result.get('cache_hits', 0)} cache hits")
+    print()
+    themes = result.get('key_themes', [])
+    if themes:
+        print("  Key themes:")
+        for theme, count in themes[:6]:
+            print(f"    · {theme} ({count})")
+        print()
+    print("  Articles:")
+    for art in result.get('articles', [])[:12]:
+        e = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(art.get('label', 'neutral'), '⚪')
+        src = art.get('source', '?')
+        conf = art.get('confidence', 0)
+        reasoning = art.get('reasoning', '')
+        print(f"    {e} [{src:5s}] c={conf:.1f} {art['score']:+.1f} | {art['title'][:55]}")
+        if reasoning and reasoning not in ('dictionary_fallback', 'no_api_key', 'empty_title'):
+            print(f"       ↳ {reasoning}")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()

@@ -398,17 +398,31 @@ def analyze_news(news_items: list) -> dict:
     }
 
 
-def get_sentiment_for_stock(symbol: str) -> dict:
+def get_sentiment_for_stock(symbol: str, use_llm: bool = False, use_cache: bool = True) -> dict:
     """
     Convenience function: fetch news and analyze sentiment in one call.
 
     Args:
         symbol: Stock code, e.g. '600519'
+        use_llm: If True, use DeepSeek LLM for nuanced sentiment (with local learning cache)
+        use_cache: If True and use_llm=True, check learned store before calling API
 
     Returns:
-        Full sentiment analysis dict with news summary
+        Full sentiment analysis dict with news summary.
+        When use_llm=True, includes "llm_used", "key_themes", "learning_store_stats".
     """
     from data.news import get_stock_news, get_market_news
+
+    if use_llm:
+        try:
+            from analysis.sentiment_llm import get_sentiment_llm
+            result = get_sentiment_llm(symbol, use_cache=use_cache)
+            result['symbol'] = symbol
+            result['fetched_at'] = __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            return result
+        except Exception as e:
+            # Fallback to dictionary if LLM module fails
+            pass
 
     stock_news = get_stock_news(symbol, max_items=20)
     market_news = get_market_news(max_items=10)
@@ -420,5 +434,5 @@ def get_sentiment_for_stock(symbol: str) -> dict:
         'stock_sentiment': stock_sentiment,
         'news_count': len(stock_news),
         'market_news_count': len(market_news),
-        'fetched_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'fetched_at': __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
