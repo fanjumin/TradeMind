@@ -11,6 +11,8 @@ from data.price import get_price_data, get_latest_price
 from analysis.technical import get_trend_detail
 from predict import predict_price, format_prediction_report
 from alerts import AlertEngine, generate_alert_report
+from data.news import get_stock_news
+from analysis.sentiment import analyze_news, get_sentiment_for_stock
 
 
 def main():
@@ -29,6 +31,7 @@ def main():
         print("  python main.py --alerts          List configured alerts")
         print("  python main.py --alert-add <sym> <type> <threshold>")
         print("  python main.py --alert-check <sym>  Check alerts for a stock")
+        print("  python main.py --sentiment <sym>   News sentiment analysis")
         return
     
     cmd = sys.argv[1]
@@ -114,6 +117,45 @@ def main():
         price = info['price'] if info else 0
         triggered = engine.check_alerts(symbol, price, indicators)
         print(generate_alert_report(symbol, price, indicators, triggered))
+
+    elif cmd == '--sentiment':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --sentiment <symbol>")
+            return
+        symbol = sys.argv[2].upper()
+        print(f"Analyzing news sentiment for {symbol}...")
+        try:
+            result = get_sentiment_for_stock(symbol)
+            ss = result.get('stock_sentiment', {})
+            print()
+            print("=" * 60)
+            print(f"  Sentiment Analysis: {symbol}")
+            print("=" * 60)
+            emoji = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(
+                ss.get('overall_label', 'neutral'), '⚪')
+            label_cn = {'bullish': '看多', 'neutral': '中性', 'bearish': '看空'}.get(
+                ss.get('overall_label', ''), '?')
+            print(f"  Overall:  {emoji} {ss.get('overall_score', 0):+.3f} ({label_cn})")
+            print(f"  Articles: {ss.get('article_count', 0)} "
+                  f"(bullish:{ss.get('bullish_count',0)} "
+                  f"neutral:{ss.get('neutral_count',0)} "
+                  f"bearish:{ss.get('bearish_count',0)})")
+            print(f"  Trend:    {ss.get('sentiment_trend', 'stable')}")
+            print()
+            print("  Key terms:")
+            for term, cnt in ss.get('top_positive_terms', [])[:5]:
+                print(f"    🟢 {term} ({cnt})")
+            for term, cnt in ss.get('top_negative_terms', [])[:5]:
+                print(f"    🔴 {term} ({cnt})")
+            print()
+            print("  Recent headlines:")
+            for art in ss.get('articles', [])[:10]:
+                e = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(art['label'], '⚪')
+                print(f"    {e} {art.get('date','')} | {art['title'][:70]}")
+            print("=" * 60)
+        except Exception as e:
+            print(f"  Error: {e}")
+            print("  (News analysis requires network access to Sina Finance)")
 
     else:
         result = skill.analyze_stock(cmd)

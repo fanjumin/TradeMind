@@ -274,6 +274,52 @@ def generate_report(symbol):
     except Exception as e:
         lines.append('  [Valuation error: %s]' % str(e))
 
+    # Sentiment (News Analysis)
+    try:
+        from data.news import get_stock_news
+        from analysis.sentiment import analyze_news
+
+        news_items = get_stock_news(symbol, max_items=20)
+        sentiment = analyze_news(news_items)
+
+        lines.append('')
+        lines.append('--- Sentiment (舆情分析) ---')
+        overall_s = sentiment.get('overall_score', 0)
+        label_s = sentiment.get('overall_label', 'neutral')
+        emoji_s = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(label_s, '⚪')
+        label_cn = {'bullish': '看多', 'neutral': '中性', 'bearish': '看空'}.get(label_s, '未知')
+        lines.append(_pad('Overall', '%s %.2f (%s)' % (emoji_s, overall_s, label_cn)))
+        lines.append(_pad('Articles', '%d (bullish:%d neutral:%d bearish:%d)' % (
+            sentiment.get('article_count', 0),
+            sentiment.get('bullish_count', 0),
+            sentiment.get('neutral_count', 0),
+            sentiment.get('bearish_count', 0),
+        )))
+        lines.append(_pad('Trend', '%s' % sentiment.get('sentiment_trend', 'stable')))
+
+        # Top terms
+        top_pos = sentiment.get('top_positive_terms', [])
+        top_neg = sentiment.get('top_negative_terms', [])
+        if top_pos:
+            pos_str = ', '.join('%s(%d)' % (t, c) for t, c in top_pos[:4])
+            lines.append(_pad('Bullish words', pos_str))
+        if top_neg:
+            neg_str = ', '.join('%s(%d)' % (t, c) for t, c in top_neg[:4])
+            lines.append(_pad('Bearish words', neg_str))
+
+        # Recent article headlines
+        articles = sentiment.get('articles', [])
+        if articles:
+            lines.append('')
+            lines.append('  [Recent News Headlines]')
+            for i, art in enumerate(articles[:8]):
+                emoji = {'bullish': '🟢', 'neutral': '🟡', 'bearish': '🔴'}.get(art['label'], '⚪')
+                lines.append('  %s %s | %s' % (emoji, art.get('date', ''), art['title'][:70]))
+    except Exception as e:
+        lines.append('')
+        lines.append('--- Sentiment (舆情分析) ---')
+        lines.append(_pad('Status', 'Unavailable (%s)' % str(e)[:40]))
+
     # Overall
     score = get_score(trend, fund_total, basic_score, detail)
     signal = get_signal(score)
