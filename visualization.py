@@ -240,3 +240,310 @@ def generate_svg_chart(df, indicators, symbol, output_path=None):
             f.write(svg)
 
     return svg
+
+
+# ============================================================
+#  Plotly Interactive Chart (added Phase 1 visualization)
+# ============================================================
+
+def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
+    """
+    Generate interactive Plotly candlestick chart with indicators.
+
+    Parameters:
+        df: DataFrame with OHLCV data (must have 'date','open','close','high','low','volume')
+        indicators: dict from technical.py (optional; auto-computed if None)
+        symbol: stock symbol for title
+        output_path: where to save HTML (default: charts/{symbol}_chart.html)
+        days: number of recent days to display
+
+    Returns:
+        str: path to saved HTML file
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import pandas as pd
+    import numpy as np
+    import os
+
+    if df.empty or 'close' not in df.columns:
+        print("No data available for chart")
+        return None
+
+    # Prepare data - take last N days
+    df = df.tail(days).copy()
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'])
+        dates = df['date']
+        df = df.set_index('date')
+    else:
+        dates = df.index
+
+    # --- Compute indicators from data ---
+    close = df['close']
+    high = df['high']
+    low = df['low']
+    volume = df['volume'] if 'volume' in df.columns else pd.Series([0]*len(df))
+
+    # MAs
+    ma5 = close.rolling(5).mean()
+    ma10 = close.rolling(10).mean()
+    ma20 = close.rolling(20).mean()
+    ma60 = close.rolling(60).mean()
+
+    # RSI
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+    avg_gain = gain.ewm(span=14, min_periods=14).mean()
+    avg_loss = loss.ewm(span=14, min_periods=14).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+
+    # MACD
+    ema12 = close.ewm(span=12).mean()
+    ema26 = close.ewm(span=26).mean()
+    macd_line = ema12 - ema26
+    signal_line = macd_line.ewm(span=9).mean()
+    macd_hist = macd_line - signal_line
+
+    # Bollinger Bands
+    bb_mid = ma20
+    bb_std = close.rolling(20).std()
+    bb_upper = bb_mid + 2 * bb_std
+    bb_lower = bb_mid - 2 * bb_std
+
+    # KDJ
+    low_n = low.rolling(9).min()
+    high_n = high.rolling(9).max()
+    rsv = (close - low_n) / (high_n - low_n).replace(0, np.nan) * 100
+    k = rsv.ewm(span=3, min_periods=3).mean()
+    d = k.ewm(span=3, min_periods=3).mean()
+    j = 3 * k - 2 * d
+
+    # Support/Resistance from indicators dict if available
+    resistance = indicators.get('resistance', None) if indicators else None
+    support = indicators.get('support', None) if indicators else None
+    pivot = indicators.get('pivot', None) if indicators else None
+
+    # --- Build figure ---
+    fig = make_subplots(
+        rows=5, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=[0.4, 0.15, 0.15, 0.15, 0.15],
+        subplot_titles=(
+            f"{symbol} - K线图",
+            "成交量",
+            f"RSI(14)",
+            "MACD(12,26,9)",
+            "KDJ(9,3,3)"
+        )
+    )
+
+    # Colors
+    COLORS = {
+        'bg': '#0d1116',
+        'plot_bg': '#161b22',
+        'grid': '#2a2e35',
+        'green': '#26a69a',
+        'red': '#ef5350',
+        'ma5': '#ffaa00',
+        'ma10': '#ff6b35',
+        'ma20': '#00aaff',
+        'ma60': '#e040fb',
+        'bb': '#888888',
+        'volume_up': '#26a69a',
+        'volume_down': '#ef5350',
+    }
+
+    # --- Row 1: Candlestick ---
+    fig.add_trace(go.Candlestick(
+        x=dates,
+        open=df['open'], high=df['high'], low=df['low'], close=df['close'],
+        name='K线',
+        increasing_line_color=COLORS['green'],
+        decreasing_line_color=COLORS['red'],
+    ), row=1, col=1)
+
+    # Moving Averages
+    for ma_name, ma_data, color in [
+        ('MA5', ma5, COLORS['ma5']),
+        ('MA10', ma10, COLORS['ma10']),
+        ('MA20', ma20, COLORS['ma20']),
+        ('MA60', ma60, COLORS['ma60']),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=dates, y=ma_data, mode='lines',
+            line=dict(width=1.2, color=color),
+            name=ma_name,
+        ), row=1, col=1)
+
+    # Bollinger Bands
+    fig.add_trace(go.Scatter(
+        x=dates, y=bb_upper, mode='lines',
+        line=dict(width=0.8, color=COLORS['bb'], dash='dash'),
+        name='BB Upper', showlegend=True,
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=bb_lower, mode='lines',
+        line=dict(width=0.8, color=COLORS['bb'], dash='dash'),
+        name='BB Lower', fill='tonexty', fillcolor='rgba(128,128,128,0.05)',
+    ), row=1, col=1)
+
+    # Support/Resistance
+    if resistance:
+        fig.add_hline(y=resistance, line=dict(color='red', width=1, dash='dot'),
+                      row=1, col=1, annotation_text=f'R:{resistance:.2f}')
+    if support:
+        fig.add_hline(y=support, line=dict(color='green', width=1, dash='dot'),
+                      row=1, col=1, annotation_text=f'S:{support:.2f}')
+    if pivot:
+        fig.add_hline(y=pivot, line=dict(color='gray', width=1, dash='dot'),
+                      row=1, col=1)
+
+    # --- Row 2: Volume ---
+    vol_colors = [COLORS['volume_up'] if c >= o else COLORS['volume_down'] 
+                  for c, o in zip(df['close'], df['open'])]
+    fig.add_trace(go.Bar(
+        x=dates, y=volume, name='成交量',
+        marker_color=vol_colors,
+        marker_line_width=0,
+    ), row=2, col=1)
+
+    # Volume MA
+    vol_ma5 = volume.rolling(5).mean()
+    fig.add_trace(go.Scatter(
+        x=dates, y=vol_ma5, mode='lines',
+        line=dict(width=1, color='#ffcc80'),
+        name='量MA5',
+    ), row=2, col=1)
+
+    # --- Row 3: RSI ---
+    fig.add_trace(go.Scatter(
+        x=dates, y=rsi, mode='lines',
+        line=dict(width=1.5, color='#b388ff'),
+        name='RSI',
+    ), row=3, col=1)
+    fig.add_hline(y=70, line=dict(color='red', width=1, dash='dash'), row=3, col=1)
+    fig.add_hline(y=30, line=dict(color='green', width=1, dash='dash'), row=3, col=1)
+    fig.add_hline(y=50, line=dict(color='#555', width=0.5, dash='dot'), row=3, col=1)
+
+    # --- Row 4: MACD ---
+    fig.add_trace(go.Scatter(
+        x=dates, y=macd_line, mode='lines',
+        line=dict(width=1.2, color='#82b1ff'),
+        name='MACD',
+    ), row=4, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=signal_line, mode='lines',
+        line=dict(width=1, color='#ff8a80'),
+        name='Signal',
+    ), row=4, col=1)
+    # MACD Histogram
+    hist_colors = [COLORS['green'] if v >= 0 else COLORS['red'] for v in macd_hist]
+    fig.add_trace(go.Bar(
+        x=dates, y=macd_hist, name='Histogram',
+        marker_color=hist_colors, marker_line_width=0,
+    ), row=4, col=1)
+    fig.add_hline(y=0, line=dict(color='#555', width=0.5), row=4, col=1)
+
+    # --- Row 5: KDJ ---
+    fig.add_trace(go.Scatter(
+        x=dates, y=k, mode='lines',
+        line=dict(width=1.2, color='#80cbc4'),
+        name='K',
+    ), row=5, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=d, mode='lines',
+        line=dict(width=1.2, color='#ffab91'),
+        name='D',
+    ), row=5, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=j, mode='lines',
+        line=dict(width=1, color='#c5e1a5', dash='dot'),
+        name='J',
+    ), row=5, col=1)
+    fig.add_hline(y=80, line=dict(color='red', width=1, dash='dash'), row=5, col=1)
+    fig.add_hline(y=20, line=dict(color='green', width=1, dash='dash'), row=5, col=1)
+
+    # --- Layout ---
+    # Build title line
+    title_lines = [f"<b>{symbol}</b>"]
+    if len(df) > 0:
+        last_close = float(df['close'].iloc[-1])
+        prev_close = float(df['close'].iloc[-2]) if len(df) > 1 else last_close
+        chg = last_close - prev_close
+        chg_pct = (chg / prev_close * 100) if prev_close else 0
+        chg_color = 'green' if chg >= 0 else 'red'
+        title_lines.append(
+            f' <span style="color:{chg_color}">'
+            f'{last_close:.2f} ({chg:+.2f} / {chg_pct:+.2f}%)</span>'
+        )
+    # Add indicators summary
+    if indicators:
+        rsi_v = indicators.get('rsi', rsi.iloc[-1] if not rsi.empty else None)
+        kdj_j = indicators.get('j', j.iloc[-1] if not j.empty else None)
+        if rsi_v is not None:
+            title_lines.append(f" | RSI:{rsi_v:.1f}")
+        if kdj_j is not None:
+            title_lines.append(f" | J:{kdj_j:.1f}")
+
+    fig.update_layout(
+        title=' '.join(title_lines),
+        xaxis_rangeslider_visible=False,
+        template='plotly_dark',
+        paper_bgcolor=COLORS['bg'],
+        plot_bgcolor=COLORS['plot_bg'],
+        height=900,
+        hovermode='x unified',
+        legend=dict(
+            orientation='h', yanchor='top', y=1.12, xanchor='left', x=0,
+            bgcolor='rgba(0,0,0,0)', font=dict(size=10)
+        ),
+        margin=dict(l=60, r=40, t=80, b=40),
+    )
+
+    # Update axes
+    fig.update_xaxes(showgrid=True, gridcolor=COLORS['grid'], zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=COLORS['grid'], zeroline=False)
+
+    # Row-specific y-axis labels
+    fig.update_yaxes(title_text="价格", row=1, col=1)
+    fig.update_yaxes(title_text="量", row=2, col=1)
+    fig.update_yaxes(title_text="RSI", row=3, col=1, range=[0, 100])
+    fig.update_yaxes(title_text="MACD", row=4, col=1)
+    fig.update_yaxes(title_text="KDJ", row=5, col=1, range=[0, 100])
+
+    # --- Save ---
+    if output_path is None:
+        os.makedirs("charts", exist_ok=True)
+        output_path = f"charts/{symbol}_chart.html"
+
+    fig.write_html(output_path, include_plotlyjs='cdn', full_html=True)
+    print(f"Chart saved: {output_path}")
+
+    return output_path
+
+
+# Quick CLI entry for direct testing
+def _plotly_cli():
+    import sys
+    from data.price import get_price_data
+    from analysis.technical import get_trend_detail
+
+    if len(sys.argv) < 2:
+        print("Usage: python visualization.py <symbol>")
+        return
+
+    symbol = sys.argv[1]
+    df = get_price_data(symbol, datalen=200)
+    if df.empty:
+        print(f"No data for {symbol}")
+        return
+
+    indicators = get_trend_detail(df)
+    plotly_chart(df, indicators=indicators, symbol=symbol)
+
+if __name__ == '__main__':
+    _plotly_cli()

@@ -10,6 +10,7 @@ from backtest import run_backtest, format_backtest_report
 from data.price import get_price_data, get_latest_price
 from analysis.technical import get_trend_detail
 from predict import predict_price, format_prediction_report
+from visualization import plotly_chart
 from alerts import AlertEngine, generate_alert_report
 from data.news import get_stock_news
 from analysis.sentiment import analyze_news, get_sentiment_for_stock
@@ -32,6 +33,8 @@ def main():
         print("  python main.py --alert-add <sym> <type> <threshold>")
         print("  python main.py --alert-check <sym>  Check alerts for a stock")
         print("  python main.py --sentiment <sym>   News sentiment analysis")
+        print("  python main.py --chart <sym>     Interactive K-line chart (Plotly)")
+
         return
     
     cmd = sys.argv[1]
@@ -117,6 +120,21 @@ def main():
         price = info['price'] if info else 0
         triggered = engine.check_alerts(symbol, price, indicators)
         print(generate_alert_report(symbol, price, indicators, triggered))
+
+    elif cmd == '--chart':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --chart <symbol>")
+            return
+        symbol = sys.argv[2]
+        print(f"Generating interactive chart for {symbol}...")
+        try:
+            df = get_price_data(symbol, datalen=200)
+            indicators = get_trend_detail(df) if not df.empty else {}
+            path = plotly_chart(df, indicators=indicators, symbol=symbol)
+            if path:
+                print(f"Chart saved: {path}")
+        except Exception as e:
+            print(f"Error: {e}")
 
     elif cmd == '--sentiment':
         if len(sys.argv) < 3:
