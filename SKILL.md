@@ -1,5 +1,7 @@
 # TradeMind Skill
 
+> **v2.1** — 27 tech indicators, 10 backtest strategies, 57 alert types, parameter optimization, Monte Carlo
+
 A-Stock analysis skill. Provides technical analysis, fund flow tracking, comprehensive fundamental scoring, and market overview.
 
 ## Data Sources
