@@ -1,2 +1,37 @@
+# Sensitive
+api_config.json
+*.key
+*.pem
 
-charts/
+# Cache
+data/etf_cache/
+data/cb_cache/
+data/financials/
+data/history/
+data/simtrade/
+data/scan_state.json
+data/scan_history.jsonl
+data/social_sentiment_store.json
+data/factors/
+data/watchlist.json
+.trademind_alerts.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Charts output
+charts/*.html
+
+# Session notes
+SESSION_SUMMARY.md
+PHASE2_PLAN.md

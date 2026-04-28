@@ -31,7 +31,10 @@ from alerts import (
 from data.news import get_stock_news
 from analysis.sentiment import analyze_news, get_sentiment_for_stock
 from analysis.sentiment_llm import SentimentLearnedStore
+from analysis.social_sentiment import analyze_social_sentiment, print_social_sentiment, print_store_stats as print_social_stats
 from analysis.llm_advisor import analyze_report as llm_analyze
+from analysis.predict import predict_stock, print_prediction
+from strategy_market import list_strategies, compare_strategies, rank_strategies, categories_summary
 
 
 def print_usage():
@@ -62,10 +65,51 @@ def print_usage():
     print("  python main.py --alert-remove <index>          Remove alert by index")
     print("")
     print("Other:")
-    print("  python main.py --predict <sym>       AI price prediction (5-day)")
+    print("  python main.py --predict <sym>       ML + LSTM price prediction (5-day)")
+    print("  python main.py --predict-llm <sym>    Above + DeepSeek LLM synthesis")
+    print("  python main.py --financials <sym>     Financial report (三表+评分)")
+    print("  python main.py --factors [symbols..]  Factor analysis (IC+分层回测)")
+    print("")
+    print("Strategy Marketplace (v2.5):")
+    print("  python main.py --strategies               List all strategies with metadata")
+    print("  python main.py --strategies compare <sym> Compare all strategies on a stock")
+    print("  python main.py --strategies rank [metric] Rank strategies by metric")
+    print("  python main.py --strategies categories    Category overview")
+    print("")
+    print("Multi-Asset (v2.5):")
+    print("  python main.py --etf list                 List all ETFs (1469 total)")
+    print("  python main.py --etf search <keyword>      Search ETFs")
+    print("  python main.py --etf <code>               ETF quote (e.g., 510050)")
+    print("  python main.py --cb list                  List active convertible bonds")
+    print("  python main.py --cb search <keyword>       Search CBs")
+    print("  python main.py --cb <code>                CB quote (e.g., 110044)")
+    print("")
+    print("Simulated Trading (v2.5):")
+    print("  python main.py --trade init [capital]        Initialize account")
+    print("  python main.py --trade buy <sym> [qty]       Market buy")
+    print("  python main.py --trade sell <sym> [qty]      Market sell")
+    print("  python main.py --trade positions             View positions")
+    print("  python main.py --trade performance           Performance report")
+    print("  python main.py --trade orders                View orders")
+    print("  python main.py --trade history               Trade history")
+    print("  python main.py --trade tick                  Update prices")
+    print("  python main.py --trade reset                 Reset account")
+    print("")
+    print("Retail Daily Picks (v2.6):")
+    print("  python main.py --daily                       Today's top picks")
+    print("  python main.py --daily --top 5               Top 5 picks")
+    print("  python main.py --daily --wechat              WeChat format")
+    print("  python main.py --talk <symbol>               Plain-language analysis")
+    print("  python main.py --watch                       Monitor your watchlist")
+    print("  python main.py --watch add <symbol>           Add to watchlist")
+    print("  python main.py --watch remove <symbol>        Remove from watchlist")
+    print("  python main.py --ralerts                     Scan for retail alerts")
+    print("  python main.py --ralerts --wechat            Alerts in WeChat format")
     print("  python main.py --sentiment <sym>     News sentiment (dictionary-based)")
     print("  python main.py --sentiment-llm <sym> LLM-powered sentiment (API + local cache)")
     print("  python main.py --sentiment-learned     Show learned sentiment store stats")
+    print("  python main.py --sentiment-social <sym> Social sentiment (Guba forum + LLM)")
+    print("  python main.py --sentiment-social-stats  Show social sentiment cache stats")
     print("  python main.py --chart <sym>         Interactive K-line chart (Plotly)")
     print("  python main.py --indicators <sym>    All 25+ technical indicators")
     print("  python main.py --ask <sym>           LLM AI analysis (DeepSeek)")
@@ -73,6 +117,294 @@ def print_usage():
 
 
 def main():
+
+    # Financial analysis (v2.5) — baostock三表分析
+    if "--financials" in sys.argv:
+        symbol = sys.argv[-1] if len(sys.argv) > 2 and not sys.argv[-1].startswith("--") else "600519"
+        from analysis.financials import print_financial_report
+        print_financial_report(symbol)
+        sys.exit(0)
+    # Factor analysis (v2.5)
+    if "--factors" in sys.argv:
+        from analysis.factors import full_factor_analysis
+        # Extract symbols after --factors
+        idx = sys.argv.index("--factors")
+        universe = sys.argv[idx+1:] if idx+1 < len(sys.argv) else None
+        full_factor_analysis(universe)
+        sys.exit(0)
+
+        # ETF data (v2.5 Phase 2)
+    if "--etf" in sys.argv:
+        from data.etf import fetch_etf_list, get_etf_price, search_etfs
+        idx = sys.argv.index("--etf")
+        sub = sys.argv[idx+1] if idx+1 < len(sys.argv) else "list"
+        
+        if sub == "list":
+            etfs = fetch_etf_list()
+            print(f"\nETF 总数: {len(etfs)}")
+            # By type
+            types = {}
+            for e in etfs:
+                t = e.get('etf_type', '其他')
+                types[t] = types.get(t, 0) + 1
+            for t, c in sorted(types.items()):
+                print(f"  {t}: {c} 只")
+            print(f"\n热门 ETF (前15):")
+            from data.etf import get_popular_etfs
+            for e in get_popular_etfs()[:15]:
+                print(f"  {e['code']} {e['name']} [{e.get('etf_type','?')}]")
+        elif sub == "search":
+            q = sys.argv[idx+2] if idx+2 < len(sys.argv) else ""
+            results = search_etfs(q)
+            print(f"\n搜索 '{q}': {len(results)} 结果")
+            for r in results[:15]:
+                print(f"  {r['code']} {r['name']} [{r.get('etf_type','?')}]")
+        else:
+            # Assume it's a code
+            p = get_etf_price(sub)
+            if p:
+                print(f"\n{p['code']} {p['name']} [ETF]")
+                print(f"  价格: {p['price']}  涨跌: {p['change_pct']:+.2f}%")
+                if p.get('pe'):
+                    print(f"  PE: {p['pe']}")
+            else:
+                print(f"ETF {sub} 未找到")
+        sys.exit(0)
+    
+    # Convertible bond data (v2.5 Phase 2)
+    if "--cb" in sys.argv:
+        from data.convertible import fetch_cb_list, get_cb_price, search_cb
+        idx = sys.argv.index("--cb")
+        sub = sys.argv[idx+1] if idx+1 < len(sys.argv) else "list"
+        
+        if sub == "list":
+            cbs = fetch_cb_list()
+            print(f"\n可转债总数: {len(cbs)} (活跃)")
+            for cb in cbs[:20]:
+                print(f"  {cb['code']} {cb['name']} -> {cb['stock_code']} | {cb.get('rating','?')} | {cb.get('expire_date','?')}")
+        elif sub == "search":
+            q = sys.argv[idx+2] if idx+2 < len(sys.argv) else ""
+            results = search_cb(q)
+            print(f"\n搜索 '{q}': {len(results)} 结果")
+            for r in results[:15]:
+                print(f"  {r['code']} {r['name']} -> {r['stock_code']}")
+        else:
+            p = get_cb_price(sub)
+            if p:
+                print(f"\n{p['code']} {p['name']} [可转债]")
+                print(f"  价格: {p['price']}  涨跌: {p['change_pct']:+.2f}%")
+            else:
+                print(f"可转债 {sub} 未找到")
+        sys.exit(0)
+    
+    # Simulated trading (v2.5 Phase 2)
+    if "--trade" in sys.argv:
+        from sim_trade import OrderManager, OrderSide, OrderType
+        om = OrderManager()
+        idx = sys.argv.index("--trade")
+        sub = sys.argv[idx+1] if idx+1 < len(sys.argv) else "status"
+        
+        if sub == "init":
+            capital = float(sys.argv[idx+2]) if idx+2 < len(sys.argv) else 1000000
+            om.cash = capital
+            om.initial_capital = capital
+            om.orders = {}
+            om.positions = {}
+            om.trades = []
+            om.snapshots = []
+            om._save_state()
+            print(f"Account initialized with {capital:,.0f}")
+        
+        elif sub == "buy":
+            symbol = sys.argv[idx+2] if idx+2 < len(sys.argv) else "600519"
+            qty = int(sys.argv[idx+3]) if idx+3 < len(sys.argv) else 100
+            result = om.submit_order(symbol, symbol, OrderSide.BUY, OrderType.MARKET, qty)
+            if result.get('error'):
+                print(f"Error: {result['error']}")
+            else:
+                print(f"Bought {qty} shares of {symbol}")
+                om.tick([symbol])
+            om.get_summary()
+        
+        elif sub == "sell":
+            symbol = sys.argv[idx+2]
+            qty = int(sys.argv[idx+3]) if idx+3 < len(sys.argv) else 0
+            if qty == 0 and symbol in om.positions:
+                qty = om.positions[symbol].quantity
+            name = om.positions.get(symbol, type('',(),{'name':symbol})()).name if hasattr(om.positions.get(symbol, None), 'name') else symbol
+            try:
+                name = om.positions[symbol].name
+            except:
+                name = symbol
+            result = om.submit_order(symbol, name, OrderSide.SELL, OrderType.MARKET, qty)
+            if result.get('error'):
+                print(f"Error: {result['error']}")
+            else:
+                print(f"Sold {qty} shares of {symbol}")
+                om.tick([symbol])
+            om.get_summary()
+        
+        elif sub in ("pos", "positions"):
+            positions = om.get_positions()
+            if not positions:
+                print("No positions")
+            else:
+                print(f"\n{'Symbol':<8s} {'Name':<16s} {'Qty':>6s} {'AvgCost':>10s} {'Price':>10s} {'PnL%':>8s}")
+                print("-" * 65)
+                for p in positions:
+                    print(f"{p['symbol']:<8s} {p['name']:<16s} {p['quantity']:>6d} {p['avg_cost']:>10.2f} {p['current_price']:>10.2f} {p['pnl_pct']:>+7.2f}%")
+        
+        elif sub in ("perf", "performance"):
+            om.get_summary()
+        
+        elif sub == "orders":
+            orders = om.get_orders()
+            pending = [o for o in orders if o['status'] == 'pending']
+            filled = [o for o in orders if o['status'] == 'filled']
+            print(f"\nOrders: {len(pending)} pending, {len(filled)} filled")
+            for o in pending:
+                print(f"  [{o['order_id']}] {o['side']} {o['symbol']} x{o['quantity']} limit={o['limit_price']}")
+        
+        elif sub == "history":
+            trades = om.get_trades()
+            print(f"\nTrade History ({len(trades)}):")
+            for t in trades[-20:]:
+                print(f"  {t['timestamp'][:19]} {t['side']:4s} {t['symbol']} x{t['quantity']} @{t['price']:.2f}")
+        
+        elif sub == "tick":
+            r = om.tick()
+            print(f"Tick: {r['prices']} prices updated, total={r['total_value']:,.0f}")
+        
+        elif sub == "reset":
+            om.cash = om.initial_capital
+            om.orders = {}
+            om.positions = {}
+            om.trades = []
+            om.snapshots = []
+            om._save_state()
+            print(f"Reset to {om.initial_capital:,.0f}")
+        
+        else:
+            om.get_summary()
+        
+        sys.exit(0)
+    
+    # Plain-talk analysis (v2.6 Phase 3)
+    if "--talk" in sys.argv:
+        sym = sys.argv[sys.argv.index("--talk")+1] if len(sys.argv) > sys.argv.index("--talk")+1 else "600519"
+        from plain_talk import plain_talk
+        print(plain_talk(sym))
+        sys.exit(0)
+    
+    # Watchlist monitor (v2.6 Phase 3)
+    if "--watch" in sys.argv:
+        from watchlist_monitor import monitor, fmt_monitor, load_watchlist, save_watchlist
+        idx = sys.argv.index("--watch")
+        sub = sys.argv[idx+1] if idx+1 < len(sys.argv) else "show"
+        if sub == "add":
+            sym = sys.argv[idx+2]
+            wl = load_watchlist()
+            if sym not in wl:
+                wl.append(sym); save_watchlist(wl)
+                print(f"Added {sym} to watchlist ({len(wl)} stocks)")
+            else:
+                print(f"{sym} already in watchlist")
+        elif sub == "remove":
+            sym = sys.argv[idx+2]
+            wl = load_watchlist()
+            if sym in wl:
+                wl.remove(sym); save_watchlist(wl)
+                print(f"Removed {sym} ({len(wl)} stocks)")
+        elif sub == "list":
+            wl = load_watchlist()
+            print(f"Watchlist ({len(wl)}): {', '.join(wl)}")
+        else:
+            r = monitor()
+            print(fmt_monitor(r))
+        sys.exit(0)
+    
+    # Retail alerts (v2.6 Phase 3)
+    if "--ralerts" in sys.argv:
+        from retail_alerts import scan_alerts, fmt_alerts, fmt_wechat
+        wechat = "--wechat" in sys.argv
+        alerts = scan_alerts()
+        if wechat:
+            print(fmt_wechat(alerts))
+        else:
+            print(fmt_alerts(alerts))
+        sys.exit(0)
+    
+    # Daily picks for retail investors (v2.6 Phase 3)
+    if "--daily" in sys.argv:
+        from daily_picks import daily_picks, fmt, fmt_wechat
+        top = 8
+        if "--top" in sys.argv:
+            ti = sys.argv.index("--top")
+            top = int(sys.argv[ti+1]) if ti+1 < len(sys.argv) else 8
+        wechat = "--wechat" in sys.argv
+        result = daily_picks(top_n=top)
+        if wechat:
+            print(fmt_wechat(result))
+        else:
+            print(fmt(result))
+        sys.exit(0)
+    
+    # Strategy marketplace (v2.5 Phase 2)
+    if "--strategies" in sys.argv:
+        idx = sys.argv.index("--strategies")
+        sub = sys.argv[idx+1] if idx+1 < len(sys.argv) else "list"
+        
+        if sub == "compare":
+            symbol = sys.argv[idx+2] if idx+2 < len(sys.argv) else "600519"
+            days = int(sys.argv[idx+3]) if idx+3 < len(sys.argv) else 252
+            result = compare_strategies(symbol, days=days)
+            if 'error' in result:
+                print(f"Error: {result['error']}")
+            else:
+                sep = "=" * 80
+                print()
+                print(sep)
+                print(f"  策略比较 — {symbol} (回测 {days} 天)")
+                print(sep)
+                header = f"  {'策略':<18s} {'类别':<14s} {'Sharpe':>7s} {'收益%':>8s} {'回撤%':>7s} {'胜率%':>6s} {'交易':>5s} {'盈亏比':>6s}"
+                print(header)
+                print("  " + "-" * 80)
+                for r in result['results']:
+                    if r.get('error'):
+                        print(f"  {r['key']:<16s} ERR: {r['error']}")
+                    else:
+                        print(f"  {r['key']:<16s} {r['category']:<14s} {r.get('sharpe_ratio',0):>7.2f} {r.get('total_return',0):>8.2f} {r.get('max_drawdown',0):>7.2f} {r.get('win_rate',0):>6.1f} {r.get('total_trades',0):>5d} {r.get('profit_factor',0):>6.2f}")
+        
+        elif sub == "rank":
+            metric = sys.argv[idx+2] if idx+2 < len(sys.argv) else "sharpe_ratio"
+            result = rank_strategies(metric=metric)
+            print(f"\n策略排名 (按 {metric}):")
+            for i, r in enumerate(result['ranking'], 1):
+                m = r.get('avg_sharpe', 0) if metric == 'sharpe_ratio' else r.get('avg_return', 0)
+                print(f"  {i:2d}. {r['name']:<20s} {m:>8.3f}")
+        
+        elif sub == "categories":
+            result = categories_summary()
+            print("\n策略类别分布:")
+            for c in result['categories']:
+                print(f"  [{c['name']}] {c['count']}个策略 — {c['description']}")
+        
+        else:  # list
+            strategies = list_strategies()
+            sep = "=" * 80
+            print()
+            print(sep)
+            print(f"  策略市场 — {len(strategies)} 个策略")
+            print(sep)
+            for s in strategies:
+                print(f"\n  [{s['key']}] {s['name']}")
+                print(f"  类别: {s['category']} | 风险: {s['risk_level']} | 周期: {s['timeframe']}")
+                print(f"  描述: {s['description']}")
+                print(f"  标签: {', '.join(s['tags'])}")
+                if s['default_params']:
+                    print(f"  参数: {s['default_params']}")
+        sys.exit(0)
+    
     skill = StockAnalysisSkill()
 
     if len(sys.argv) < 2:
@@ -236,31 +568,86 @@ def main():
         print(f"Removed alert [{idx}]")
         print(engine.list_alerts())
 
-    # ── Predict ──
+        # ── Predict ──
+    elif cmd == '--predict-llm':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --predict-llm <symbol>")
+            print("  Runs ML + LSTM prediction, then DeepSeek LLM synthesis")
+            return
+        symbol = sys.argv[2].upper()
+        print(f"Running {symbol} prediction with LLM synthesis...")
+        try:
+            result = predict_stock(symbol, use_llm=True)
+            print_prediction(result)
+        except Exception as e:
+            print(f"  Error: {e}")
+            import traceback
+            traceback.print_exc()
+
     elif cmd == '--predict':
         if len(sys.argv) < 3:
             print("Usage: python main.py --predict <symbol>")
+            print("  ML ensemble (RF+GBDT+Ridge) + LSTM deep learning")
             return
-        symbol = sys.argv[2]
-        df = get_price_data(symbol, datalen=100)
-        result = predict_price(df, horizon=5)
-        print(format_prediction_report(result))
+        symbol = sys.argv[2].upper()
+        print(f"Running {symbol} prediction...")
+        try:
+            result = predict_stock(symbol, use_llm=False)
+            print_prediction(result)
+            # Auto-generate chart with prediction overlay
+            df = get_price_data(symbol, datalen=200)
+            if not df.empty:
+                try:
+                    ind = get_trend_detail(df) if not df.empty else {}
+                    chart_path = plotly_chart(df, indicators=ind, symbol=symbol,
+                                              prediction=result, days=120)
+                    if chart_path:
+                        print(f"  📊 预测图表: {chart_path}")
+                except Exception:
+                    pass  # Chart is optional
+        except Exception as e:
+            print(f"  Error: {e}")
+            import traceback
+            traceback.print_exc()
 
     # ── Chart ──
     elif cmd == '--chart':
         if len(sys.argv) < 3:
-            print("Usage: python main.py --chart <symbol>")
+            print("Usage: python main.py --chart <symbol> [--with-predict] [--with-sentiment]")
             return
         symbol = sys.argv[2]
+        with_predict = '--with-predict' in sys.argv
+        with_sentiment = '--with-sentiment' in sys.argv
         print(f"Generating interactive chart for {symbol}...")
         try:
             df = get_price_data(symbol, datalen=200)
+            if df.empty:
+                print(f"Error: No data for {symbol}")
+                return
             indicators = get_trend_detail(df) if not df.empty else {}
-            path = plotly_chart(df, indicators=indicators, symbol=symbol)
+
+            prediction = None
+            if with_predict:
+                try:
+                    prediction = predict_stock(symbol, use_llm=False)
+                except Exception as e:
+                    print(f"  Prediction skipped: {e}")
+
+            sentiment_data = None
+            if with_sentiment:
+                try:
+                    sentiment_data = analyze_social_sentiment(symbol, force_llm=False)
+                except Exception as e:
+                    print(f"  Sentiment skipped: {e}")
+
+            path = plotly_chart(df, indicators=indicators, symbol=symbol,
+                                prediction=prediction, sentiment=sentiment_data)
             if path:
                 print(f"Chart saved: {path}")
         except Exception as e:
             print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
 
     # ── Technical Indicators ──
     elif cmd == '--indicators':
@@ -325,6 +712,26 @@ def main():
         print(f"  Models used: {stats['models_used']}")
         print(f"  Store: {stats['store_path']}")
         print("=" * 50)
+
+    elif cmd == '--sentiment-social':
+        if len(sys.argv) < 3:
+            print("Usage: python main.py --sentiment-social <symbol>")
+            print("  Fetches Guba forum posts and analyzes via DeepSeek LLM")
+            print("  Results cached -> future runs skip API for same posts")
+            return
+        symbol = sys.argv[2].upper()
+        force = '--no-cache' in sys.argv
+        print(f"Social Sentiment Analysis for {symbol}...")
+        try:
+            result = analyze_social_sentiment(symbol, force_llm=force)
+            print_social_sentiment(result)
+        except Exception as e:
+            print(f"  Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    elif cmd == '--sentiment-social-stats':
+        print_social_stats()
 
     elif cmd == '--sentiment':
         if len(sys.argv) < 3:
@@ -409,6 +816,7 @@ def print_llm_sentiment(result):
         if reasoning and reasoning not in ('dictionary_fallback', 'no_api_key', 'empty_title'):
             print(f"       ↳ {reasoning}")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

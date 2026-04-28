@@ -138,3 +138,44 @@ def get_latest_price(symbol):
         'low': float(parts[34]),
         'amount': float(parts[37]) if len(parts) > 37 and parts[37] else 0,
     }
+
+def get_minute_data(symbol, datalen=240):
+    """
+    Get intraday 1-minute K-line data from Sina Finance.
+    Returns DataFrame with OHLCV for current trading day.
+    """
+    sina_symbol = _get_sina_symbol(symbol)
+
+    url = "https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData"
+    params = {
+        "symbol": sina_symbol,
+        "scale": "1",  # 1-minute
+        "ma": "no",
+        "datalen": str(datalen),
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://finance.sina.com.cn/",
+    }
+
+    for attempt in range(3):
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=10)
+            break
+        except requests.exceptions.Timeout:
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            raise
+
+    data = json.loads(r.text)
+    if not data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data)
+    df['date'] = pd.to_datetime(df['day'])
+    df.set_index('date', inplace=True)
+    for col in ['close', 'open', 'high', 'low', 'volume']:
+        df[col] = df[col].astype(float)
+
+    return df

@@ -246,19 +246,27 @@ def generate_svg_chart(df, indicators, symbol, output_path=None):
 #  Plotly Interactive Chart (added Phase 1 visualization)
 # ============================================================
 
-def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
+def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120,
+                prediction=None, sentiment=None):
     """
-    Generate interactive Plotly candlestick chart with indicators.
+    Professional multi-panel stock chart with prediction & sentiment overlay.
+    
+    Panels (6 rows):
+      1. Candlestick + MA(5,10,20,60) + Bollinger Bands + Prediction trajectory
+      2. Volume (green/red) + Volume MA
+      3. MACD (12,26,9) histogram
+      4. RSI (14) with overbought/oversight lines
+      5. KDJ (9,3,3)
+      6. Sentiment gauge (if sentiment data provided)
 
     Parameters:
-        df: DataFrame with OHLCV data (must have 'date','open','close','high','low','volume')
-        indicators: dict from technical.py (optional; auto-computed if None)
-        symbol: stock symbol for title
-        output_path: where to save HTML (default: charts/{symbol}_chart.html)
-        days: number of recent days to display
-
-    Returns:
-        str: path to saved HTML file
+        df: DataFrame with OHLCV
+        indicators: dict from technical.py
+        symbol: stock symbol
+        output_path: save path
+        days: recent days to show
+        prediction: dict from predict_stock() — draws prediction trajectory
+        sentiment: dict from analyze_social_sentiment() — draws sentiment bar
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -270,7 +278,6 @@ def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
         print("No data available for chart")
         return None
 
-    # Prepare data - take last N days
     df = df.tail(days).copy()
     if 'date' in df.columns:
         df['date'] = pd.to_datetime(df['date'])
@@ -279,19 +286,17 @@ def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
     else:
         dates = df.index
 
-    # --- Compute indicators from data ---
     close = df['close']
     high = df['high']
     low = df['low']
-    volume = df['volume'] if 'volume' in df.columns else pd.Series([0]*len(df))
+    volume = df['volume'] if 'volume' in df.columns else pd.Series(0, index=df.index)
 
-    # MAs
+    # --- Compute indicators ---
     ma5 = close.rolling(5).mean()
     ma10 = close.rolling(10).mean()
     ma20 = close.rolling(20).mean()
     ma60 = close.rolling(60).mean()
 
-    # RSI
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = (-delta).clip(lower=0)
@@ -300,20 +305,17 @@ def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
     rs = avg_gain / avg_loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
 
-    # MACD
     ema12 = close.ewm(span=12).mean()
     ema26 = close.ewm(span=26).mean()
     macd_line = ema12 - ema26
     signal_line = macd_line.ewm(span=9).mean()
     macd_hist = macd_line - signal_line
 
-    # Bollinger Bands
     bb_mid = ma20
     bb_std = close.rolling(20).std()
     bb_upper = bb_mid + 2 * bb_std
     bb_lower = bb_mid - 2 * bb_std
 
-    # KDJ
     low_n = low.rolling(9).min()
     high_n = high.rolling(9).max()
     rsv = (close - low_n) / (high_n - low_n).replace(0, np.nan) * 100
@@ -321,212 +323,265 @@ def plotly_chart(df, indicators=None, symbol="", output_path=None, days=120):
     d = k.ewm(span=3, min_periods=3).mean()
     j = 3 * k - 2 * d
 
-    # Support/Resistance from indicators dict if available
-    resistance = indicators.get('resistance', None) if indicators else None
-    support = indicators.get('support', None) if indicators else None
-    pivot = indicators.get('pivot', None) if indicators else None
+    # Volume MA
+    vol_ma5 = volume.rolling(5).mean()
 
-    # --- Build figure ---
+    # --- Determine panel layout ---
+    has_sentiment = sentiment is not None and isinstance(sentiment, dict)
+    n_rows = 6 if has_sentiment else 5
+    row_heights = [0.35, 0.13, 0.13, 0.13, 0.13, 0.13] if has_sentiment else [0.38, 0.15, 0.15, 0.15, 0.17]
+    subplot_titles = (
+        f"<b>{symbol}</b> — K线 + 均线 + 布林带",
+        "成交量",
+        "MACD (12,26,9)",
+        "RSI (14)",
+        "KDJ (9,3,3)",
+    )
+    if has_sentiment:
+        subplot_titles += ("📊 社交情绪",)
+
+    # --- Color scheme (dark professional) ---
+    BG = '#0d1117'
+    PAPER = '#0d1117'
+    GRID = '#21262d'
+    TEXT = '#c9d1d9'
+    GREEN = '#26a69a'
+    RED = '#ef5350'
+    BLUE = '#42a5f5'
+    YELLOW = '#ffca28'
+    PURPLE = '#ab47bc'
+    ORANGE = '#ff7043'
+    WHITE = '#e0e0e0'
+
     fig = make_subplots(
-        rows=5, cols=1,
+        rows=n_rows, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=[0.4, 0.15, 0.15, 0.15, 0.15],
-        subplot_titles=(
-            f"{symbol} - K线图",
-            "成交量",
-            f"RSI(14)",
-            "MACD(12,26,9)",
-            "KDJ(9,3,3)"
-        )
+        vertical_spacing=0.02,
+        row_heights=row_heights,
+        subplot_titles=subplot_titles,
     )
 
-    # Colors
-    COLORS = {
-        'bg': '#0d1116',
-        'plot_bg': '#161b22',
-        'grid': '#2a2e35',
-        'green': '#26a69a',
-        'red': '#ef5350',
-        'ma5': '#ffaa00',
-        'ma10': '#ff6b35',
-        'ma20': '#00aaff',
-        'ma60': '#e040fb',
-        'bb': '#888888',
-        'volume_up': '#26a69a',
-        'volume_down': '#ef5350',
-    }
-
-    # --- Row 1: Candlestick ---
+    # ═══════════════════ PANEL 1: Candlestick ═══════════════════
     fig.add_trace(go.Candlestick(
-        x=dates,
-        open=df['open'], high=df['high'], low=df['low'], close=df['close'],
+        x=df.index, open=df['open'], high=df['high'],
+        low=df['low'], close=df['close'],
         name='K线',
-        increasing_line_color=COLORS['green'],
-        decreasing_line_color=COLORS['red'],
+        increasing_line_color=GREEN, decreasing_line_color=RED,
+        increasing_fillcolor=GREEN, decreasing_fillcolor=RED,
+        showlegend=True,
     ), row=1, col=1)
 
-    # Moving Averages
-    for ma_name, ma_data, color in [
-        ('MA5', ma5, COLORS['ma5']),
-        ('MA10', ma10, COLORS['ma10']),
-        ('MA20', ma20, COLORS['ma20']),
-        ('MA60', ma60, COLORS['ma60']),
+    # MAs
+    for ma, name, color, width in [
+        (ma5, 'MA5', '#ff6d00', 1),
+        (ma10, 'MA10', '#ffab00', 1),
+        (ma20, 'MA20', '#00e5ff', 1.5),
+        (ma60, 'MA60', '#d500f9', 1),
     ]:
         fig.add_trace(go.Scatter(
-            x=dates, y=ma_data, mode='lines',
-            line=dict(width=1.2, color=color),
-            name=ma_name,
+            x=df.index, y=ma, mode='lines',
+            name=name, line=dict(color=color, width=width),
+            showlegend=True,
         ), row=1, col=1)
 
     # Bollinger Bands
     fig.add_trace(go.Scatter(
-        x=dates, y=bb_upper, mode='lines',
-        line=dict(width=0.8, color=COLORS['bb'], dash='dash'),
-        name='BB Upper', showlegend=True,
+        x=df.index, y=bb_upper, mode='lines',
+        name='BB Upper', line=dict(color='rgba(66,165,245,0.3)', width=0.5),
+        showlegend=True,
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
-        x=dates, y=bb_lower, mode='lines',
-        line=dict(width=0.8, color=COLORS['bb'], dash='dash'),
-        name='BB Lower', fill='tonexty', fillcolor='rgba(128,128,128,0.05)',
+        x=df.index, y=bb_lower, mode='lines',
+        name='BB Lower', line=dict(color='rgba(66,165,245,0.3)', width=0.5),
+        fill='tonexty', fillcolor='rgba(66,165,245,0.05)',
+        showlegend=True,
     ), row=1, col=1)
 
-    # Support/Resistance
-    if resistance:
-        fig.add_hline(y=resistance, line=dict(color='red', width=1, dash='dot'),
-                      row=1, col=1, annotation_text=f'R:{resistance:.2f}')
-    if support:
-        fig.add_hline(y=support, line=dict(color='green', width=1, dash='dot'),
-                      row=1, col=1, annotation_text=f'S:{support:.2f}')
-    if pivot:
-        fig.add_hline(y=pivot, line=dict(color='gray', width=1, dash='dot'),
-                      row=1, col=1)
+    # --- Prediction overlay ---
+    if prediction and isinstance(prediction, dict):
+        sk = prediction.get('sklearn', {})
+        if sk and sk.get('predicted_price'):
+            last_date = df.index[-1]
+            last_close = close.iloc[-1]
+            target_price = sk['predicted_price']
+            pred_days = sk.get('prediction_days', 5)
 
-    # --- Row 2: Volume ---
-    vol_colors = [COLORS['volume_up'] if c >= o else COLORS['volume_down'] 
-                  for c, o in zip(df['close'], df['open'])]
+            # Draw prediction arrow + target
+            pred_dates = pd.date_range(last_date, periods=pred_days+2, freq='B')[1:]
+            pred_line = np.linspace(last_close, target_price, pred_days+1)[1:]
+
+            color = GREEN if sk['direction'] == 'up' else RED
+            fig.add_trace(go.Scatter(
+                x=list(pred_dates), y=list(pred_line),
+                mode='lines+markers',
+                name=f'ML预测 ({pred_days}日)',
+                line=dict(color=color, width=2, dash='dot'),
+                marker=dict(size=6, symbol='diamond', color=color),
+                showlegend=True,
+            ), row=1, col=1)
+
+            # Confidence band
+            conf = sk.get('direction_confidence', 0.65)
+            band = abs(target_price - last_close) * (1 - conf) * 2
+            upper_band = pred_line + band * np.linspace(0.2, 0.8, len(pred_line))
+            lower_band = pred_line - band * np.linspace(0.2, 0.8, len(pred_line))
+            fig.add_trace(go.Scatter(
+                x=list(pred_dates), y=list(upper_band),
+                mode='lines', line=dict(width=0),
+                showlegend=False,
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=list(pred_dates), y=list(lower_band),
+                mode='lines', line=dict(width=0),
+                fill='tonexty', fillcolor=f'rgba({ "38,166,154" if color==GREEN else "239,83,80" },0.1)',
+                name=f'置信区间 ({conf:.0%})',
+                showlegend=True,
+            ), row=1, col=1)
+
+    # ═══════════════════ PANEL 2: Volume ═══════════════════
+    vol_colors = [GREEN if close.iloc[i] >= df['open'].iloc[i] else RED
+                  for i in range(len(df))]
     fig.add_trace(go.Bar(
-        x=dates, y=volume, name='成交量',
-        marker_color=vol_colors,
-        marker_line_width=0,
+        x=df.index, y=volume, name='成交量',
+        marker_color=vol_colors, marker_line_width=0,
+        showlegend=False,
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=df.index, y=vol_ma5, mode='lines',
+        name='VOL MA5', line=dict(color=YELLOW, width=1),
+        showlegend=False,
     ), row=2, col=1)
 
-    # Volume MA
-    vol_ma5 = volume.rolling(5).mean()
-    fig.add_trace(go.Scatter(
-        x=dates, y=vol_ma5, mode='lines',
-        line=dict(width=1, color='#ffcc80'),
-        name='量MA5',
-    ), row=2, col=1)
-
-    # --- Row 3: RSI ---
-    fig.add_trace(go.Scatter(
-        x=dates, y=rsi, mode='lines',
-        line=dict(width=1.5, color='#b388ff'),
-        name='RSI',
+    # ═══════════════════ PANEL 3: MACD ═══════════════════
+    macd_colors = [GREEN if v >= 0 else RED for v in macd_hist]
+    fig.add_trace(go.Bar(
+        x=df.index, y=macd_hist, name='MACD Hist',
+        marker_color=macd_colors, marker_line_width=0,
+        showlegend=False,
     ), row=3, col=1)
-    fig.add_hline(y=70, line=dict(color='red', width=1, dash='dash'), row=3, col=1)
-    fig.add_hline(y=30, line=dict(color='green', width=1, dash='dash'), row=3, col=1)
-    fig.add_hline(y=50, line=dict(color='#555', width=0.5, dash='dot'), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=df.index, y=macd_line, mode='lines',
+        name='MACD', line=dict(color=BLUE, width=1.5),
+        showlegend=False,
+    ), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=df.index, y=signal_line, mode='lines',
+        name='Signal', line=dict(color=ORANGE, width=1),
+        showlegend=False,
+    ), row=3, col=1)
+    # Zero line
+    fig.add_hline(y=0, line_dash="solid", line_color=GRID, line_width=0.5, row=3, col=1)
 
-    # --- Row 4: MACD ---
+    # ═══════════════════ PANEL 4: RSI ═══════════════════
     fig.add_trace(go.Scatter(
-        x=dates, y=macd_line, mode='lines',
-        line=dict(width=1.2, color='#82b1ff'),
-        name='MACD',
+        x=df.index, y=rsi, mode='lines',
+        name='RSI', line=dict(color=PURPLE, width=1.5),
+        fill='tozeroy', fillcolor='rgba(171,71,188,0.05)',
+        showlegend=False,
     ), row=4, col=1)
-    fig.add_trace(go.Scatter(
-        x=dates, y=signal_line, mode='lines',
-        line=dict(width=1, color='#ff8a80'),
-        name='Signal',
-    ), row=4, col=1)
-    # MACD Histogram
-    hist_colors = [COLORS['green'] if v >= 0 else COLORS['red'] for v in macd_hist]
-    fig.add_trace(go.Bar(
-        x=dates, y=macd_hist, name='Histogram',
-        marker_color=hist_colors, marker_line_width=0,
-    ), row=4, col=1)
-    fig.add_hline(y=0, line=dict(color='#555', width=0.5), row=4, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color=RED, line_width=0.8,
+                  annotation_text="超买 70", annotation_position="right", row=4, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color=GREEN, line_width=0.8,
+                  annotation_text="超卖 30", annotation_position="right", row=4, col=1)
+    fig.add_hline(y=50, line_dash="solid", line_color=GRID, line_width=0.5, row=4, col=1)
 
-    # --- Row 5: KDJ ---
+    # ═══════════════════ PANEL 5: KDJ ═══════════════════
     fig.add_trace(go.Scatter(
-        x=dates, y=k, mode='lines',
-        line=dict(width=1.2, color='#80cbc4'),
-        name='K',
+        x=df.index, y=k, mode='lines',
+        name='K', line=dict(color=WHITE, width=1),
+        showlegend=False,
     ), row=5, col=1)
     fig.add_trace(go.Scatter(
-        x=dates, y=d, mode='lines',
-        line=dict(width=1.2, color='#ffab91'),
-        name='D',
+        x=df.index, y=d, mode='lines',
+        name='D', line=dict(color=YELLOW, width=1),
+        showlegend=False,
     ), row=5, col=1)
     fig.add_trace(go.Scatter(
-        x=dates, y=j, mode='lines',
-        line=dict(width=1, color='#c5e1a5', dash='dot'),
-        name='J',
+        x=df.index, y=j, mode='lines',
+        name='J', line=dict(color=PURPLE, width=0.8, dash='dot'),
+        showlegend=False,
     ), row=5, col=1)
-    fig.add_hline(y=80, line=dict(color='red', width=1, dash='dash'), row=5, col=1)
-    fig.add_hline(y=20, line=dict(color='green', width=1, dash='dash'), row=5, col=1)
+    fig.add_hline(y=80, line_dash="dash", line_color=RED, line_width=0.5, row=5, col=1)
+    fig.add_hline(y=20, line_dash="dash", line_color=GREEN, line_width=0.5, row=5, col=1)
 
-    # --- Layout ---
-    # Build title line
-    title_lines = [f"<b>{symbol}</b>"]
-    if len(df) > 0:
-        last_close = float(df['close'].iloc[-1])
-        prev_close = float(df['close'].iloc[-2]) if len(df) > 1 else last_close
-        chg = last_close - prev_close
-        chg_pct = (chg / prev_close * 100) if prev_close else 0
-        chg_color = 'green' if chg >= 0 else 'red'
-        title_lines.append(
-            f' <span style="color:{chg_color}">'
-            f'{last_close:.2f} ({chg:+.2f} / {chg_pct:+.2f}%)</span>'
-        )
-    # Add indicators summary
-    if indicators:
-        rsi_v = indicators.get('rsi', rsi.iloc[-1] if not rsi.empty else None)
-        kdj_j = indicators.get('j', j.iloc[-1] if not j.empty else None)
-        if rsi_v is not None:
-            title_lines.append(f" | RSI:{rsi_v:.1f}")
-        if kdj_j is not None:
-            title_lines.append(f" | J:{kdj_j:.1f}")
+    # ═══════════════════ PANEL 6: Sentiment ═══════════════════
+    if has_sentiment:
+        ss = sentiment.get('social_sentiment', sentiment)
+        score = ss.get('overall_score', 0)
+        label = ss.get('overall_label', 'neutral')
+        post_count = ss.get('post_count', ss.get('article_count', 0))
+
+        # Sentiment gauge as horizontal bar
+        bar_color = GREEN if label == 'bullish' else (RED if label == 'bearish' else YELLOW)
+        score_norm = max(-1, min(1, score))  # clamp to [-1, 1]
+
+        fig.add_trace(go.Bar(
+            x=[score_norm], y=['情绪'],
+            orientation='h', name='社交情绪',
+            marker_color=bar_color,
+            text=[f"{score:+.2f} ({label})  |  {post_count}条帖子"],
+            textposition='inside', textfont=dict(color='black', size=12),
+            width=0.4,
+            showlegend=False,
+        ), row=6, col=1)
+
+        # Add reference zone
+        fig.add_vrect(x0=-1, x1=-0.3, fillcolor='rgba(239,83,80,0.08)', line_width=0,
+                      row=6, col=1)
+        fig.add_vrect(x0=-0.3, x1=0.3, fillcolor='rgba(255,202,40,0.08)', line_width=0,
+                      row=6, col=1)
+        fig.add_vrect(x0=0.3, x1=1, fillcolor='rgba(38,166,154,0.08)', line_width=0,
+                      row=6, col=1)
+        fig.add_vline(x=0, line_dash="solid", line_color=GRID, line_width=0.5,
+                      row=6, col=1)
+        fig.update_xaxes(range=[-1.1, 1.1], row=6, col=1,
+                         tickvals=[-1, -0.5, 0, 0.5, 1],
+                         ticktext=['🔴 看空', '-0.5', '中性', '+0.5', '🟢 看多'])
+
+    # ═══════════════════ Layout ═══════════════════
+    title_text = f"<b>{symbol}</b> 技术分析"
+    if prediction:
+        sk = prediction.get('sklearn', {})
+        if sk:
+            arrow = '↗' if sk['direction'] == 'up' else '↘'
+            title_text += (f"  |  ML预测: {arrow} {sk['predicted_price']:.2f} "
+                          f"({sk['predicted_return']:+.2%})  准确率{sk['direction_confidence']:.0%}")
 
     fig.update_layout(
-        title=' '.join(title_lines),
-        xaxis_rangeslider_visible=False,
+        title=dict(text=title_text, font=dict(size=16, color=TEXT), x=0.5),
         template='plotly_dark',
-        paper_bgcolor=COLORS['bg'],
-        plot_bgcolor=COLORS['plot_bg'],
-        height=900,
+        paper_bgcolor=PAPER,
+        plot_bgcolor=BG,
+        font=dict(color=TEXT, size=10),
+        height=200 * n_rows,
         hovermode='x unified',
         legend=dict(
-            orientation='h', yanchor='top', y=1.12, xanchor='left', x=0,
-            bgcolor='rgba(0,0,0,0)', font=dict(size=10)
+            orientation='h', yanchor='top', y=1.12, xanchor='center', x=0.5,
+            font=dict(size=9),
         ),
-        margin=dict(l=60, r=40, t=80, b=40),
+        margin=dict(l=10, r=20, t=70 if prediction else 50, b=10),
+        xaxis=dict(showgrid=True, gridcolor=GRID, gridwidth=0.5),
+        dragmode='pan',
     )
 
-    # Update axes
-    fig.update_xaxes(showgrid=True, gridcolor=COLORS['grid'], zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor=COLORS['grid'], zeroline=False)
+    # Y-axis labels
+    fig.update_yaxes(title_text="价格", row=1, col=1, showgrid=True, gridcolor=GRID)
+    fig.update_yaxes(title_text="量", row=2, col=1, showgrid=True, gridcolor=GRID)
+    fig.update_yaxes(title_text="MACD", row=3, col=1, showgrid=True, gridcolor=GRID)
+    fig.update_yaxes(title_text="RSI", row=4, col=1, showgrid=True, gridcolor=GRID, range=[0, 100])
+    fig.update_yaxes(title_text="KDJ", row=5, col=1, showgrid=True, gridcolor=GRID, range=[0, 100])
 
-    # Row-specific y-axis labels
-    fig.update_yaxes(title_text="价格", row=1, col=1)
-    fig.update_yaxes(title_text="量", row=2, col=1)
-    fig.update_yaxes(title_text="RSI", row=3, col=1, range=[0, 100])
-    fig.update_yaxes(title_text="MACD", row=4, col=1)
-    fig.update_yaxes(title_text="KDJ", row=5, col=1, range=[0, 100])
+    fig.update_xaxes(showgrid=True, gridcolor=GRID, rangeslider_visible=False)
 
     # --- Save ---
     if output_path is None:
-        os.makedirs("charts", exist_ok=True)
-        output_path = f"charts/{symbol}_chart.html"
+        chart_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'charts')
+        os.makedirs(chart_dir, exist_ok=True)
+        output_path = os.path.join(chart_dir, f'{symbol}_chart.html')
 
     fig.write_html(output_path, include_plotlyjs='cdn', full_html=True)
-    print(f"Chart saved: {output_path}")
-
     return output_path
 
-
-# Quick CLI entry for direct testing
 def _plotly_cli():
     import sys
     from data.price import get_price_data

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradeMind - 股票分析</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+.header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px;
+          display: flex; align-items: center; gap: 16px; }
+.header h1 { font-size: 20px; color: #58a6ff; }
+.header a { color: #8b949e; text-decoration: none; font-size: 14px; }
+.header a:hover { color: #c9d1d9; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+.search-box { display: flex; gap: 12px; margin-bottom: 24px; align-items: center; }
+.search-box input { flex: 1; max-width: 300px; padding: 12px 16px; font-size: 16px;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; }
+.search-box input:focus { outline: none; border-color: #58a6ff; }
+.search-box button { padding: 12px 24px; font-size: 16px; border: none; border-radius: 6px;
+    cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+.btn-analyze { background: #238636; color: white; }
+.btn-analyze:hover { opacity: 0.85; }
+.btn-deep { background: #1f6feb; color: white; }
+.btn-deep:hover { opacity: 0.85; }
+.btn-chart { background: #6e40c9; color: white; }
+.btn-chart:hover { opacity: 0.85; }
+.quick-codes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.quick-codes a { padding: 4px 12px; background: #21262d; border: 1px solid #30363d;
+    border-radius: 20px; color: #58a6ff; text-decoration: none; font-size: 13px;
+    cursor: pointer; }
+.quick-codes a:hover { background: #30363d; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; }
+.panel h3 { font-size: 14px; color: #8b949e; margin-bottom: 12px; text-transform: uppercase;
+    letter-spacing: 1px; }
+.panel.full { grid-column: 1 / -1; }
+.chart-frame { width: 100%; height: 900px; border: none; border-radius: 4px;
+    background: #0d1117; }
+.metric { display: flex; justify-content: space-between; padding: 6px 0;
+    border-bottom: 1px solid #21262d; font-size: 14px; }
+.metric:last-child { border-bottom: none; }
+.metric .label { color: #8b949e; }
+.metric .value { font-weight: 600; }
+.value.up { color: #26a69a; }
+.value.down { color: #ef5350; }
+.value.neutral { color: #ffca28; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px;
+    font-weight: 600; }
+.badge.bullish { background: rgba(38,166,154,0.15); color: #26a69a; }
+.badge.bearish { background: rgba(239,83,80,0.15); color: #ef5350; }
+.badge.neutral { background: rgba(255,202,40,0.15); color: #ffca28; }
+.loading { text-align: center; padding: 40px; color: #8b949e; }
+.error { color: #ef5350; padding: 12px; background: rgba(239,83,80,0.1);
+    border-radius: 4px; }
+.theme-tag { display: inline-block; padding: 2px 10px; background: #21262d;
+    border-radius: 12px; margin: 3px; font-size: 12px; }
+#status { font-size: 13px; color: #8b949e; margin-left: 12px; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 TradeMind</h1>
+    <a href="/">← 返回仪表盘</a>
+    <span id="status"></span>
+</div>
+
+<div class="container">
+    <div class="search-box">
+        <input type="text" id="symbol" placeholder="输入股票代码，如 600519" maxlength="6"
+               onkeydown="if(event.key==='Enter')analyze()">
+        <button class="btn-analyze" onclick="analyze()">🔍 快速分析</button>
+        <button class="btn-deep" onclick="analyzeDeep()">🧠 LLM 深度分析</button>
+        <button class="btn-chart" onclick="showChart()">📈 打开图表</button>
+    </div>
+    <div class="quick-codes">
+        <span style="color:#8b949e;font-size:13px;padding:4px 0">常用:</span>
+        <a onclick="loadSymbol('600519')">600519 茅台</a>
+        <a onclick="loadSymbol('000001')">000001 平安银行</a>
+        <a onclick="loadSymbol('000858')">000858 五粮液</a>
+        <a onclick="loadSymbol('300750')">300750 宁德时代</a>
+        <a onclick="loadSymbol('601318')">601318 中国平安</a>
+        <a onclick="loadSymbol('002594')">002594 比亚迪</a>
+    </div>
+
+    <div class="grid">
+        <!-- Prediction Panel -->
+        <div class="panel" id="predict-panel">
+            <h3>🤖 5日预测</h3>
+            <div class="loading" id="predict-loading">输入代码开始分析...</div>
+        </div>
+
+        <!-- Sentiment Panel -->
+        <div class="panel" id="sentiment-panel">
+            <h3>💬 情绪分析</h3>
+            <div class="loading" id="sentiment-loading">—</div>
+        </div>
+
+        <!-- Social Sentiment Panel -->
+        <div class="panel" id="social-panel">
+            <h3>📱 社交情绪 (股吧)</h3>
+            <div class="loading" id="social-loading">点击 LLM 深度分析获取...</div>
+        </div>
+
+        <!-- Model Detail Panel -->
+        <div class="panel" id="model-panel">
+            <h3>🧠 模型详情</h3>
+            <div class="loading" id="model-loading">—</div>
+        </div>
+
+        <!-- Chart Panel (full width) -->
+        <div class="panel full" id="chart-panel" style="display:none">
+            <h3>📈 K线图表</h3>
+            <iframe class="chart-frame" id="chart-frame"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+const BASE = '';
+
+async function api(path) {
+    const resp = await fetch(BASE + path);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+}
+
+function loadSymbol(code) {
+    document.getElementById('symbol').value = code;
+    analyze();
+}
+
+function setLoading(panelId, text) {
+    document.getElementById(panelId).innerHTML =
+        `<h3>${document.getElementById(panelId).querySelector('h3')?.textContent || ''}</h3>
+         <div class="loading">⏳ ${text}...</div>`;
+}
+
+async function analyze() {
+    const sym = document.getElementById('symbol').value.trim().toUpperCase();
+    if (!sym || sym.length !== 6) { alert('请输入6位股票代码'); return; }
+
+    document.getElementById('status').textContent = '分析中...';
+    setLoading('predict-panel', '预测计算中');
+    setLoading('sentiment-panel', '情绪分析中');
+    document.getElementById('social-panel').innerHTML =
+        '<h3>📱 社交情绪 (股吧)</h3><div class="loading">点击 LLM 深度分析获取...</div>';
+    document.getElementById('model-panel').innerHTML =
+        '<h3>🧠 模型详情</h3><div class="loading">—</div>';
+
+    try {
+        // Fetch prediction and sentiment in parallel
+        const [pred, sent] = await Promise.all([
+            api('/api/predict/' + sym),
+            api('/api/sentiment/' + sym),
+        ]);
+        document.getElementById('status').textContent = '✓ 完成';
+        renderPrediction(pred);
+        renderSentiment(sent);
+        renderModelDetail(pred);
+    } catch (e) {
+        document.getElementById('status').textContent = '✗ 失败';
+        document.getElementById('predict-panel').innerHTML =
+            '<h3>🤖 5日预测</h3><div class="error">' + e.message + '</div>';
+    }
+}
+
+async function analyzeDeep() {
+    const sym = document.getElementById('symbol').value.trim().toUpperCase();
+    if (!sym || sym.length !== 6) { alert('请输入6位股票代码'); return; }
+
+    document.getElementById('status').textContent = 'LLM 深度分析中 (约2分钟)...';
+
+    try {
+        const [pred, social] = await Promise.all([
+            api('/api/predict/' + sym + '/llm'),
+            api('/api/sentiment-social/' + sym),
+        ]);
+        document.getElementById('status').textContent = '✓ LLM分析完成';
+        renderPrediction(pred);
+        renderSocialSentiment(social);
+        renderModelDetail(pred);
+    } catch (e) {
+        document.getElementById('status').textContent = '✗ LLM分析失败';
+        document.getElementById('social-panel').innerHTML =
+            '<h3>📱 社交情绪</h3><div class="error">' + e.message + '</div>';
+    }
+}
+
+function showChart() {
+    const sym = document.getElementById('symbol').value.trim().toUpperCase();
+    if (!sym || sym.length !== 6) { alert('请输入6位股票代码'); return; }
+    const panel = document.getElementById('chart-panel');
+    const frame = document.getElementById('chart-frame');
+    panel.style.display = 'block';
+    frame.src = '/api/chart/' + sym + '?t=' + Date.now();
+}
+
+function renderPrediction(data) {
+    const sk = data.sklearn || {};
+    const ls = data.lstm || {};
+    const llm = data.llm || {};
+
+    let dirClass = sk.direction === 'up' ? 'up' : 'down';
+    let arrow = sk.direction === 'up' ? '↗' : '↘';
+    let badge = sk.direction === 'up'
+        ? '<span class="badge bullish">看涨</span>'
+        : '<span class="badge bearish">看跌</span>';
+
+    let html = '<h3>🤖 5日预测 ' + badge + '</h3>';
+    html += '<div class="metric"><span class="label">当前价</span><span class="value">' +
+        (sk.latest_price || '?') + '</span></div>';
+    html += '<div class="metric"><span class="label">目标价</span><span class="value ' + dirClass + '">' +
+        (sk.predicted_price || '?') + ' ' + arrow + '</span></div>';
+    html += '<div class="metric"><span class="label">预期收益</span><span class="value ' + dirClass + '">' +
+        ((sk.predicted_return || 0) * 100).toFixed(2) + '%</span></div>';
+    html += '<div class="metric"><span class="label">方向准确率</span><span class="value">' +
+        Math.round((sk.direction_confidence || 0) * 100) + '%</span></div>';
+    html += '<div class="metric"><span class="label">训练样本</span><span class="value">' +
+        (sk.sample_count || '?') + ' 天</span></div>';
+
+    if (ls && ls.direction) {
+        html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d">';
+        html += '<div style="font-size:12px;color:#8b949e;margin-bottom:8px">LSTM v2</div>';
+        html += '<div class="metric"><span class="label">方向</span><span class="value ' +
+            (ls.direction === 'up' ? 'up' : 'down') + '">' +
+            (ls.direction === 'up' ? '↗' : '↘') + ' ' +
+            ((ls.predicted_return || 0) * 100).toFixed(2) + '%</span></div>';
+        html += '<div class="metric"><span class="label">准确率</span><span class="value">' +
+            Math.round((ls.direction_accuracy_test || 0) * 100) + '%</span></div>';
+        html += '</div>';
+    }
+
+    if (llm && llm.final_direction) {
+        html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d">';
+        html += '<div style="font-size:12px;color:#8b949e;margin-bottom:8px">🤖 DeepSeek LLM 研判</div>';
+        let ld = llm.final_direction;
+        let le = ld === 'up' ? '🟢 看涨' : (ld === 'down' ? '🔴 看跌' : '🟡 中性');
+        html += '<div class="metric"><span class="label">最终方向</span><span class="value">' + le + '</span></div>';
+        html += '<div class="metric"><span class="label">置信度</span><span class="value">' +
+            Math.round((llm.confidence || 0) * 100) + '%</span></div>';
+        if (llm.advice) html += '<div class="metric"><span class="label">建议</span><span class="value">' +
+            llm.advice + '</span></div>';
+        if (llm.risk_warning) html += '<div class="metric"><span class="label">风险</span><span class="value" style="color:#ef5350">' +
+            llm.risk_warning + '</span></div>';
+        html += '</div>';
+    }
+
+    document.getElementById('predict-panel').innerHTML = html;
+}
+
+function renderSentiment(data) {
+    const ss = (data.stock_sentiment || data) || {};
+    let label = ss.overall_label || 'neutral';
+    let badge = label === 'bullish'
+        ? '<span class="badge bullish">看多</span>'
+        : (label === 'bearish' ? '<span class="badge bearish">看空</span>'
+           : '<span class="badge neutral">中性</span>');
+
+    let html = '<h3>💬 新闻情绪 ' + badge + '</h3>';
+    html += '<div class="metric"><span class="label">情绪评分</span><span class="value">' +
+        (ss.overall_score || 0).toFixed(2) + '</span></div>';
+    html += '<div class="metric"><span class="label">文章数</span><span class="value">' +
+        (ss.article_count || 0) + '</span></div>';
+    html += '<div class="metric"><span class="label">趋势</span><span class="value">' +
+        (ss.sentiment_trend || 'stable') + '</span></div>';
+
+    let terms = ss.top_positive_terms || [];
+    if (terms.length) {
+        html += '<div style="margin-top:8px;font-size:12px;color:#8b949e">热门关键词:</div>';
+        html += '<div style="margin-top:4px">';
+        for (let [t, c] of terms.slice(0, 6)) {
+            html += '<span class="theme-tag">' + t + ' (' + c + ')</span>';
+        }
+        html += '</div>';
+    }
+
+    document.getElementById('sentiment-panel').innerHTML = html;
+}
+
+function renderSocialSentiment(data) {
+    if (data.error) {
+        document.getElementById('social-panel').innerHTML =
+            '<h3>📱 社交情绪</h3><div class="error">' + data.error + '</div>';
+        return;
+    }
+
+    let label = data.overall_label || 'neutral';
+    let badge = label === 'bullish'
+        ? '<span class="badge bullish">看多</span>'
+        : (label === 'bearish' ? '<span class="badge bearish">看空</span>'
+           : '<span class="badge neutral">中性</span>');
+
+    let html = '<h3>📱 社交情绪 (股吧) ' + badge + '</h3>';
+    html += '<div class="metric"><span class="label">情绪评分</span><span class="value">' +
+        (data.overall_score || 0).toFixed(2) + '</span></div>';
+    html += '<div class="metric"><span class="label">帖子数</span><span class="value">' +
+        (data.post_count || 0) + ' (已评分: ' + (data.scored_count || 0) + ')</span></div>';
+    html += '<div class="metric"><span class="label">看多/看空</span><span class="value">' +
+        (data.bull_count || 0) + ' / ' + (data.bear_count || 0) + '</span></div>';
+    html += '<div class="metric"><span class="label">API调用</span><span class="value">' +
+        (data.api_calls || 0) + ' 次</span></div>';
+
+    if (data.themes && data.themes.length) {
+        html += '<div style="margin-top:8px;font-size:12px;color:#8b949e">热门讨论:</div>';
+        html += '<div style="margin-top:4px">';
+        for (let [t, c] of data.themes.slice(0, 8)) {
+            html += '<span class="theme-tag">' + t + ' (' + c + ')</span>';
+        }
+        html += '</div>';
+    }
+
+    document.getElementById('social-panel').innerHTML = html;
+}
+
+function renderModelDetail(data) {
+    const sk = data.sklearn || {};
+    const scores = sk.model_scores || {};
+
+    let html = '<h3>🧠 模型详情</h3>';
+    html += '<div class="metric"><span class="label">RandomForest</span><span class="value">' +
+        Math.round((scores.random_forest || 0) * 100) + '%</span></div>';
+    html += '<div class="metric"><span class="label">GradientBoost</span><span class="value">' +
+        Math.round((scores.gradient_boost || 0) * 100) + '%</span></div>';
+    html += '<div class="metric"><span class="label">Ridge</span><span class="value">' +
+        Math.round((scores.ridge || 0) * 100) + '%</span></div>';
+
+    const ls = data.lstm || {};
+    if (ls && ls.direction_accuracy_test !== undefined) {
+        html += '<div class="metric"><span class="label">LSTM v2</span><span class="value">' +
+            Math.round((ls.direction_accuracy_test || 0) * 100) + '%' +
+            ' <span style="font-size:11px;color:#8b949e">(' + (ls.epochs_trained || '?') + '轮)</span></span></div>';
+    }
+    html += '<div style="margin-top:12px;font-size:11px;color:#8b949e">集成方法: 加权投票 (RF 40% + GB 35% + Ridge 25%)</div>';
+
+    document.getElementById('model-panel').innerHTML = html;
+}
+</script>
+</body>
+</html>

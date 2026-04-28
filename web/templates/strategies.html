@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeMind — 策略市场</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
+        h1 { color: #58a6ff; margin-bottom: 8px; }
+        .subtitle { color: #8b949e; margin-bottom: 24px; }
+        .filters { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .filter-btn { padding: 6px 14px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .filter-btn:hover, .filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; transition: border-color 0.2s; }
+        .card:hover { border-color: #58a6ff; }
+        .card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
+        .card-name { font-size: 16px; font-weight: 600; color: #58a6ff; }
+        .card-key { font-size: 12px; color: #8b949e; font-family: monospace; background: #0d1117; padding: 2px 6px; border-radius: 4px; }
+        .badges { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+        .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+        .badge-cat { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
+        .badge-risk-low { background: #23863622; color: #3fb950; border: 1px solid #23863644; }
+        .badge-risk-medium { background: #d2992222; color: #d29922; border: 1px solid #d2992244; }
+        .badge-risk-high { background: #da363322; color: #f85149; border: 1px solid #da363344; }
+        .badge-tf { background: #a371f722; color: #a371f7; border: 1px solid #a371f744; }
+        .card-desc { font-size: 13px; color: #8b949e; margin-bottom: 10px; line-height: 1.5; }
+        .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+        .tag { font-size: 11px; background: #21262d; color: #8b949e; padding: 2px 6px; border-radius: 4px; }
+        .params { font-size: 11px; color: #484f58; font-family: monospace; }
+        .loading { text-align: center; color: #8b949e; padding: 40px; }
+    </style>
+</head>
+<body>
+    <h1>📊 TradeMind 策略市场</h1>
+    <p class="subtitle">9 个策略 · 5 大类别 · 趋势/动量/均值回归/量价/组合</p>
+    
+    <div class="filters">
+        <button class="filter-btn active" onclick="filter('all')">全部</button>
+        <button class="filter-btn" onclick="filter('trend')">📈 趋势跟踪</button>
+        <button class="filter-btn" onclick="filter('momentum')">🚀 动量</button>
+        <button class="filter-btn" onclick="filter('mean_reversion')">🔄 均值回归</button>
+        <button class="filter-btn" onclick="filter('volume')">📊 量价</button>
+        <button class="filter-btn" onclick="filter('combined')">🔗 组合策略</button>
+    </div>
+    
+    <div id="strategy-grid" class="grid">
+        <div class="loading">加载策略中...</div>
+    </div>
+
+    <script>
+        async function loadStrategies() {
+            try {
+                const resp = await fetch('/api/v1/strategies', {headers: {'X-API-Key': 'tm-562d9a355715c1fea132d4c0f9d55afb'}});
+                const data = await resp.json();
+                window.allStrategies = data.data.strategies;
+                renderStrategies(window.allStrategies);
+            } catch(e) {
+                document.getElementById('strategy-grid').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
+            }
+        }
+        
+        function riskBadge(level) {
+            const cls = 'badge badge-risk-' + level;
+            const labels = {low: '🟢 低风险', medium: '🟡 中风险', high: '🔴 高风险'};
+            return '<span class="' + cls + '">' + (labels[level] || level) + '</span>';
+        }
+        
+        function catLabel(cat) {
+            const labels = {trend: '趋势跟踪', momentum: '动量', mean_reversion: '均值回归', volume: '量价', combined: '组合策略'};
+            return labels[cat] || cat;
+        }
+        
+        function tfLabel(tf) {
+            const labels = {day: '日内', swing: '波段', position: '中长线'};
+            return labels[tf] || tf;
+        }
+        
+        function renderStrategies(strategies) {
+            const grid = document.getElementById('strategy-grid');
+            grid.innerHTML = strategies.map(s => `
+                <div class="card" data-category="${s.category}">
+                    <div class="card-header">
+                        <span class="card-name">${s.name}</span>
+                        <span class="card-key">${s.key}</span>
+                    </div>
+                    <div class="badges">
+                        <span class="badge badge-cat">${catLabel(s.category)}</span>
+                        ${riskBadge(s.risk_level)}
+                        <span class="badge badge-tf">⏱ ${tfLabel(s.timeframe)}</span>
+                    </div>
+                    <div class="card-desc">${s.description}</div>
+                    <div class="tags">${(s.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                    ${s.default_params && Object.keys(s.default_params).length > 0 ? 
+                        '<div class="params">⚙ ' + JSON.stringify(s.default_params) + '</div>' : ''}
+                </div>
+            `).join('');
+        }
+        
+        function filter(cat) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(c => {
+                c.style.display = (cat === 'all' || c.dataset.category === cat) ? '' : 'none';
+            });
+        }
+        
+        loadStrategies();
+    </script>
+</body>
+</html>
