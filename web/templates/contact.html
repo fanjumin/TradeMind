@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}联系客服 — TradeMind{% endblock %}
+{% block nav_contact %}active{% endblock %}
+{% block style %}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;line-height:1.6}
+.nav{display:flex;justify-content:center;gap:24px;padding:20px;font-size:14px}
+.nav a{color:#8b949e;text-decoration:none}
+.nav a:hover{color:#58a6ff}
+.container{max-width:600px;margin:0 auto;padding:40px 20px;text-align:center}
+h1{color:#58a6ff;font-size:28px;margin-bottom:12px}
+p{color:#8b949e;font-size:15px;margin:8px 0}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:24px;margin:20px auto;text-align:left}
+.card h3{color:#f0f6fc;font-size:16px;margin-bottom:8px}
+.card p{font-size:14px}
+.footer{text-align:center;padding:30px;color:#484f58;font-size:13px;margin-top:40px}
+
+{% endblock %}
+{% block content %}
+<div class="container-narrow">
+<div class="nav">
+<a href="/">首页</a><a href="/subscribe">订阅</a><a href="/docs">API文档</a><a href="/tutorial">教程</a><a href="/contact">联系客服</a>
+</div>
+<div class="container">
+<h1>联系我们</h1>
+<p>有问题、建议或合作意向？欢迎联系。</p>
+
+<div class="card">
+<h3>微信</h3>
+<p>搜索微信公众号或添加客服微信：<strong>TradeMind</strong></p>
+</div>
+
+<div class="card">
+<h3>邮箱</h3>
+<p><a href="mailto:support@easykai.cn" style="color:#58a6ff">support@easykai.cn</a></p>
+</div>
+
+<div class="card">
+<h3>常见问题</h3>
+<p><strong>Q: API Key 丢失了怎么办？</strong><br>A: 联系客服验证身份后重置。</p>
+<p><strong>Q: 免费版够用吗？</strong><br>A: 每天 100 次调用，适合个人尝试和小规模使用。</p>
+<p><strong>Q: 支持那些编程语言？</strong><br>A: 任何支持 HTTP 的语言都可以。</p>
+</div>
+
+</div>
+<div class="footer"><a href="/" style="color:#484f58">← 返回首页</a></div>
+</div>
+{% endblock %}

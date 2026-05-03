@@ -1,14 +1,16 @@
-"""
-TradeMind Web Dashboard - Real-time A-Stock Market Tracker
-"""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
-
-import json
-import time
+"""TradeMind Unified — 所有页面 + API 统一服务"""
+import sys, os, json
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+app = Flask(__name__, template_folder="web/templates")
+
+# =============================================
+# Web Routes (from web/app.py)
+# =============================================
 
 from data.price import get_latest_price, get_price_data
 from data.index import get_all_indices_status
@@ -26,14 +28,9 @@ from visualization import plotly_chart
 from data.price import get_price_data as fetch_price_data
 from analysis.technical import get_trend_detail as fetch_indicators
 
-app = Flask(__name__)
-pm = PortfolioManager()
-
-# Register API v1 blueprint
+# API v1 blueprint
 from web.api_v1 import api_v1, OPENAPI_SPEC, SWAGGER_HTML
-
 app.register_blueprint(api_v1)
-
 
 @app.route('/api/docs')
 def api_docs_global():
@@ -41,9 +38,34 @@ def api_docs_global():
 
 @app.route('/api/openapi.json')
 def api_openapi_global():
-    from flask import jsonify
     return jsonify(OPENAPI_SPEC)
 
+@app.after_request
+def no_cache(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Helper functions from web/app.py
+def safe_json(obj):
+    if isinstance(obj, dict):
+        return {k: safe_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [safe_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if obj == float('inf'): return 999.0
+        if obj == float('-inf'): return -999.0
+        if obj != obj: return 0
+        return obj
+    elif hasattr(obj, 'item'):
+        return safe_json(obj.item())
+    return obj
+
+def safe_jsonify(obj, *args, **kwargs):
+    return jsonify(safe_json(obj), *args, **kwargs)
+
+# === Web Routes ===
 @app.after_request
 def no_cache(response):
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -838,11 +860,274 @@ def api_full_analysis(symbol):
 
     return jsonify(result)
 
+
+# =============================================
+# API/SaaS Routes (from trademind-api)
+# =============================================
+import sys as _api_sys
+_api_sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "trademind-api"))
+from api_auth import require_free
+from api_key_manager import generate_key, list_keys, get_usage_stats, create_payment_order, confirm_payment
+from payment import verify_notify
+
+@app.route('/about')
+def about_page():
+    return render_template('about.html')
+
+@app.route('/subscribe')
+def subscribe_page():
+    return render_template('subscribe.html')
+
+@app.route('/docs')
+def docs_page():
+    return render_template('docs.html')
+
+@app.route('/tutorial')
+def tutorial_page():
+    return render_template('tutorial.html')
+
+@app.route('/contact')
+def contact_page():
+    return render_template('contact.html')
+
+# =============================================
+# API v2 — Key Management (no stock data)
+# =============================================
+
+def api_response(data=None, error=None, status=200):
+    resp = {'success': error is None, 'timestamp': datetime.now().isoformat()}
+    if data is not None: resp['data'] = data
+    if error: resp['error'] = error
+    return jsonify(resp), status
+
+def api_error(msg, code=400):
+    return api_response(error=msg, status=code)
+
+# Generate a free API key (anyone can do this)
+@app.route('/api/v2/key/generate')
+@require_free
+def key_generate():
+    from api_key_manager import generate_key
+    result = generate_key('free', 'web_user')
+    return api_response(data={'key': result['key'], 'tier': result['tier']})
+
+# =============================================
+# ADMIN — API Key & Payment Management
+# =============================================
+
+@app.route('/api/admin/keys')
+def admin_keys():
+    from api_key_manager import list_keys, get_usage_stats
+    keys = list_keys()
+    stats = get_usage_stats()
+    return jsonify({'keys': keys, 'stats': stats})
+
+@app.route('/api/admin/gen_key', methods=['POST'])
+def admin_gen_key():
+    data = request.get_json() or {}
+    tier = data.get('tier', 'free')
+    name = data.get('name', '')
+    days = data.get('days', 365)
+    from api_key_manager import generate_key
+    return jsonify(generate_key(tier, name, days))
+
+@app.route('/api/admin/payment/create', methods=['POST'])
+def admin_payment_create():
+    data = request.get_json() or {}
+    from api_key_manager import create_payment_order
+    result = create_payment_order(
+        data.get('key_id', 0),
+        data.get('amount', 199),
+        data.get('tier', 'premium')
+    )
+    return jsonify(result)
+
+@app.route('/api/admin/payment/confirm', methods=['POST'])
+def admin_payment_confirm():
+    data = request.get_json() or {}
+    from api_key_manager import confirm_payment
+    return jsonify(confirm_payment(data.get('order_id', '')))
+
+# WeChat Pay callback
+@app.route('/api/payment/notify', methods=['POST'])
+def payment_notify():
+    from payment import verify_notify
+    verify_notify(request.headers, request.data)
+    return jsonify({'code': 'SUCCESS', 'message': 'ok'})
+
+# =============================================
+# Health check
+# =============================================
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'service': 'TradeMind API', 'version': 'v0.1.0'})
+
+# =============================================
+# Static files
+# =============================================
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+# =============================================
+# Error handlers
+# =============================================
+
+@app.errorhandler(404)
+def not_found(e):
+    return api_error('Not found', 404)
+
+@app.errorhandler(500)
+def server_error(e):
+    return api_error('Internal server error', 500)
+
+
+
+# =============================================
+# Backup Routes (integrated from sync_server)
+# =============================================
+import backup_module as bm
+from flask import send_file, Response as FlaskResponse
+
+# Start watchdog on app startup
+_watchdog_started = False
+
+@app.before_request
+def start_watchdog():
+    global _watchdog_started
+    if not _watchdog_started:
+        _watchdog_started = True
+        wd = bm.Watchdog(bm.DEFAULT_DB)
+        wd.start()
+        import atexit
+        atexit.register(wd.stop)
+
+@app.route("/backup")
+def backup_page():
+    return render_template("backup.html")
+
+@app.route("/api/backups")
+def api_list_backups():
+    bk = bm.BackupManager()
+    return jsonify({"backups": bk.list(), "db_path": bm.DEFAULT_DB, "backup_dir": str(bm.BACKUP_DIR)})
+
+@app.route("/api/backup", methods=["POST"])
+def api_do_backup():
+    bk = bm.BackupManager()
+    p = bm.Path(bm.DEFAULT_DB)
+    if p.exists():
+        r = bk.save(p.read_bytes())
+        pr = bm.push_notification(r["name"], r["size"], source="manual")
+        return jsonify({"ok": True, "name": r["name"], "push": pr})
+    return jsonify({"ok": False, "error": "db not found"}), 404
+
+@app.route("/api/download/<name>")
+def api_download(name):
+    bk = bm.BackupManager()
+    try:
+        data = bk.load(name)
+        resp = FlaskResponse(data, mimetype="application/octet-stream")
+        resp.headers["Content-Disposition"] = f"attachment; filename={name}"
+        return resp
+    except FileNotFoundError:
+        return jsonify({"error": "not found"}), 404
+
+@app.route("/api/restore", methods=["POST"])
+def api_restore():
+    data = request.get_json() or {}
+    name = data.get("name", "")
+    if not name:
+        return jsonify({"error": "missing name"}), 400
+    bk = bm.BackupManager()
+    r = bk.restore(name, bm.DEFAULT_DB)
+    return jsonify({"ok": True, **r})
+
+@app.route("/api/delete/<name>", methods=["DELETE"])
+def api_delete(name):
+    bk = bm.BackupManager()
+    bk.delete(name)
+    return jsonify({"ok": True})
+
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "no file"}), 400
+    data = file.read()
+    bk = bm.BackupManager()
+    r = bk.save(data, file.filename)
+    return jsonify({"ok": True, "name": r["name"]})
+
+@app.route("/api/push_config")
+def api_get_push_config():
+    return jsonify(bm.load_push_config())
+
+@app.route("/api/push_config", methods=["POST"])
+def api_set_push_config():
+    data = request.get_json() or {}
+    cfg = bm.load_push_config()
+    if "enabled" in data: cfg["enabled"] = bool(data["enabled"])
+    if "wecom_user" in data: cfg["wecom_user"] = str(data["wecom_user"])
+    bm.save_push_config(cfg)
+    return jsonify({"ok": True, **cfg})
+
+@app.route("/api/push_test", methods=["POST"])
+def api_push_test():
+    r = bm.push_notification("test-message.txt", 0, source="测试")
+    return jsonify(r)
+
+@app.route("/api/backup_ping")
+def api_backup_ping():
+    return jsonify({"ok": True, "time": datetime.now().isoformat()})
+
+
+# =============================================
+# Update Routes (version management)
+# =============================================
+import update_manager as um
+
+@app.route("/update")
+def update_page():
+    return render_template("update.html")
+
+@app.route("/api/update/check")
+def api_update_check():
+    return jsonify(um.check_update())
+
+@app.route("/api/update/download")
+def api_update_download():
+    data = um.download_source()
+    if isinstance(data, dict) and "error" in data:
+        return jsonify(data), 500
+    from flask import Response as FlaskResp
+    resp = FlaskResp(data, mimetype="application/zip")
+    resp.headers["Content-Disposition"] = "attachment; filename=TradeMind-source.zip"
+    return resp
+
+@app.route("/api/update/apply", methods=["POST"])
+def api_update_apply():
+    return jsonify(um.apply_update())
+
+@app.route("/api/update/rollback", methods=["POST"])
+def api_update_rollback():
+    data = request.get_json() or {}
+    return jsonify(um.rollback(data.get("version", "")))
+
+@app.route("/api/update/versions")
+def api_update_versions():
+    return jsonify({"versions": um.list_versions()})
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='TradeMind Web Dashboard')
-    parser.add_argument('--host', default='0.0.0.0', help='Bind address')
-    parser.add_argument('--port', type=int, default=5000, help='Port number')
+    parser = argparse.ArgumentParser(description="TradeMind Unified Server")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8081)
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    print(f"TradeMind Web Dashboard starting on http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=False)
+    print(f"  TradeMind Unified Server")
+    print(f"  Pages: / /analyze /strategies /trade /about /subscribe /docs /tutorial /contact")
+    print(f"  API:   /api/indices /api/stock/<s> /api/screener/* /api/alert/send /api/v2/* /api/admin/*")
+    print(f"  http://{args.host}:{args.port}")
+    app.run(host=args.host, port=args.port, debug=args.debug)

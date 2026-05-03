@@ -1,8 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>TradeMind 模拟交易</title>
-<style>
+{% extends "base.html" %}
+{% block title %}TradeMind 模拟交易{% endblock %}
+{% block nav_trade %}active{% endblock %}
+{% block style %}
+
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;padding:20px}
 h1{color:#58a6ff;margin-bottom:4px}
@@ -29,8 +29,10 @@ tr:hover{background:#1c2128}
 .tabs{display:flex;gap:4px;margin-bottom:12px}
 .tab{padding:5px 14px;border:1px solid #30363d;background:#0d1117;color:#8b949e;border-radius:4px;cursor:pointer;font-size:13px}
 .tab.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
-</style></head>
-<body>
+
+{% endblock %}
+{% block content %}
+<div class="container">
 <h1>TradeMind 模拟交易</h1>
 <p class="subtitle">A股成本模型 | 佣金0.03%(min5)+印花税0.05%+滑点0.1%</p>
 
@@ -141,4 +143,73 @@ async function loadAll(){
     document.getElementById('perf-stats').innerHTML='<div class="red">加载失败: '+e.message+'</div>';}}
 
 loadAll();
-</script></body></html>
+</script>
+</div>
+{% endblock %}
+{% block scripts %}
+
+let curTab = 'buy';
+function switchTab(t){curTab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('buy-form').style.display=t==='buy'?'':'none';
+  document.getElementById('sell-form').style.display=t==='sell'?'':'none';}
+
+document.getElementById('b-type').onchange=function(){document.getElementById('b-limit').disabled=this.value==='market'}
+document.getElementById('s-type').onchange=function(){document.getElementById('s-limit').disabled=this.value==='market'}
+
+async function api(path, method='GET', body=null){
+  const opts={method,headers:{'Content-Type':'application/json','X-API-Key':'tm-562d9a355715c1fea132d4c0f9d55afb'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(path,opts);
+  return r.json();}
+
+async function placeOrder(side){
+  const sym=document.getElementById((side==='buy'?'b':'s')+'-symbol').value;
+  let qty=parseInt(document.getElementById((side==='buy'?'b':'s')+'-qty').value)||100;
+  const otype=document.getElementById((side==='buy'?'b':'s')+'-type').value;
+  const lprice=parseFloat(document.getElementById((side==='buy'?'b':'s')+'-limit').value)||0;
+  const data=await api('/api/v1/trade/order','POST',{symbol:sym,side,qty,order_type:otype,limit_price:lprice});
+  const msg=document.getElementById('order-msg');
+  if(data.error){msg.innerHTML='<span class="red">'+data.error+'</span>';return}
+  msg.innerHTML='<span class="green">'+side.toUpperCase()+' '+data.data.order.quantity+' '+sym+' @'+data.data.order.filled_price+'</span>';
+  loadAll();}
+
+async function doTick(){await api('/api/v1/trade/tick','POST');loadAll();}
+async function doReset(){if(confirm('Reset account?')){await api('/api/v1/trade/reset','POST');loadAll();}}
+
+async function loadAll(){
+  try{
+    const perf=await api('/api/v1/trade/performance');
+    const d=perf.data||perf;
+    document.getElementById('perf-stats').innerHTML=
+      '<div class="stat-row"><span>初始资金</span><span class="stat-val">'+d.initial_capital.toLocaleString()+'</span></div>'+
+      '<div class="stat-row"><span>总资产</span><span class="stat-val">'+d.total_value.toLocaleString()+'</span></div>'+
+      '<div class="stat-row"><span>总收益</span><span class="stat-val '+(d.total_return_pct>=0?'green':'red')+'">'+d.total_return_pct.toFixed(2)+'%</span></div>'+
+      '<div class="stat-row"><span>年化收益</span><span class="stat-val">'+d.annualized_return_pct.toFixed(2)+'%</span></div>'+
+      '<div class="stat-row"><span>Sharpe</span><span class="stat-val">'+d.sharpe_ratio.toFixed(3)+'</span></div>'+
+      '<div class="stat-row"><span>最大回撤</span><span class="stat-val red">'+d.max_drawdown_pct.toFixed(2)+'%</span></div>'+
+      '<div class="stat-row"><span>胜率</span><span class="stat-val">'+d.win_rate_pct.toFixed(1)+'% ('+d.total_trades+'笔)</span></div>';
+
+    const pos=await api('/api/v1/trade/positions');
+    const pp=pos.data||pos;
+    if(!Array.isArray(pp)||pp.length===0){
+      document.getElementById('positions-table').innerHTML='<div style="padding:8px;color:#8b949e">暂无持仓</div>';
+    }else{
+      let h='<table><tr><th>代码</th><th>名称</th><th>数量</th><th>成本</th><th>现价</th><th>盈亏%</th></tr>';
+      pp.forEach(p=>{h+='<tr><td>'+p.symbol+'</td><td>'+p.name+'</td><td>'+p.quantity+'</td><td>'+p.avg_cost.toFixed(2)+'</td><td>'+p.current_price.toFixed(2)+'</td><td class="'+(p.pnl_pct>=0?'green':'red')+'">'+p.pnl_pct.toFixed(2)+'%</td></tr>'});
+      h+='</table>';document.getElementById('positions-table').innerHTML=h;}
+
+    const trades=await api('/api/v1/trade/history?limit=10');
+    const tt=trades.data||trades;
+    if(!Array.isArray(tt)||tt.length===0){
+      document.getElementById('trades-table').innerHTML='<div style="padding:8px;color:#8b949e">暂无成交</div>';
+    }else{
+      let h='<table><tr><th>时间</th><th>方向</th><th>代码</th><th>数量</th><th>价格</th></tr>';
+      tt.slice().reverse().forEach(t=>{h+='<tr><td>'+t.timestamp.substring(11,19)+'</td><td class="'+(t.side==='buy'?'green':'red')+'">'+(t.side==='buy'?'买入':'卖出')+'</td><td>'+t.symbol+'</td><td>'+t.quantity+'</td><td>'+t.price.toFixed(2)+'</td></tr>'});
+      h+='</table>';document.getElementById('trades-table').innerHTML=h;}
+  }catch(e){
+    document.getElementById('perf-stats').innerHTML='<div class="red">加载失败: '+e.message+'</div>';}}
+
+loadAll();
+
+{% endblock %}

@@ -217,7 +217,7 @@ def export_strategy(name):
         'description': info.get('description', ''),
         'tags': info.get('tags', []),
         'params': info.get('default_params', {}),
-        'version': '2.5',
+        'version': '0.1.0',
     }
 
 

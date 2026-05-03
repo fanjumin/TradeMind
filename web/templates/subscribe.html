@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}TradeMind 订阅{% endblock %}
+{% block nav_subscribe %}active{% endblock %}
+{% block style %}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.container{max-width:480px;width:100%;padding:20px}
+h1{color:#58a6ff;text-align:center;margin-bottom:8px}
+.sub{color:#8b949e;text-align:center;margin-bottom:30px;font-size:14px}
+.plan{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:12px}
+.plan h3{color:#58a6ff;font-size:18px;margin-bottom:4px}
+.price{font-size:28px;font-weight:700;color:#3fb950}
+.price span{font-size:14px;color:#8b949e;font-weight:400}
+.features{list-style:none;margin:12px 0}
+.features li{padding:4px 0;font-size:13px;color:#c9d1d9}
+.features li::before{content:'✓ ';color:#3fb950}
+button{width:100%;padding:12px;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer}
+.btn-free{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn-pro{background:#1f6feb;color:#fff}
+.btn-pro:hover{background:#388bfd}
+.result{margin-top:12px;padding:12px;border-radius:6px;font-size:13px;display:none;background:#161b22;border:1px solid #30363d}
+.result pre{font-family:monospace;font-size:12px;word-break:break-all;margin-top:8px;background:#0d1117;padding:8px;border-radius:4px}
+.info{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-top:16px;font-size:13px}
+.info code{background:#0d1117;padding:2px 6px;border-radius:4px;font-size:12px}
+.back{text-align:center;margin-top:16px}
+.back a{color:#8b949e;font-size:13px;text-decoration:none}
+.back a:hover{color:#58a6ff}
+
+{% endblock %}
+{% block content %}
+<div class="container-narrow">
+<div class="container">
+<h1>TradeMind</h1>
+<p class="sub">AI驱动的A股分析API平台</p>
+
+<div class="plan">
+<h3>Free 免费版</h3>
+<div class="price">¥0<span>/月</span></div>
+<ul class="features">
+<li>基础行情 & 大盘指数</li><li>25项技术指标</li><li>词典情绪分析</li><li>100次API调用/天</li>
+</ul>
+<button class="btn-free" onclick="getFreeKey()">获取免费 API Key</button>
+</div>
+
+<div class="plan" style="border-color:#1f6feb">
+<h3>Premium 高级版</h3>
+<div class="price">¥199<span>/月</span></div>
+<ul class="features">
+<li>全部功能无限制</li><li>82指标+13K线形态</li><li>LLM+股吧情绪分析</li><li>10策略回测+优化</li><li>ETF/可转债/模拟交易</li><li>每日市场扫描+微信推送</li><li>10,000次API调用/天</li>
+</ul>
+<button class="btn-pro" onclick="startPayment()">¥199 微信支付订阅</button>
+</div>
+
+<div id="result" class="result"></div>
+
+<div class="info">
+<strong>API 使用:</strong><br>
+<code>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/stock/600519/full</code>
+</div>
+<div class="back"><a href="/">← 返回首页</a></div>
+</div>
+
+<script>
+async function getFreeKey(){
+  const r=await fetch('/api/admin/gen_key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:'free',name:'web_user'})});
+  const d=await r.json();
+  const el=document.getElementById('result');
+  el.style.display='block';
+  el.innerHTML='<strong>Your Free API Key:</strong><br><pre>'+d.key+'</pre>Tier: '+d.tier;
+}
+async function startPayment(){
+  const el=document.getElementById('result');
+  el.style.display='block';
+  el.innerHTML='<strong>WeChat Pay (Stub Mode)</strong><br>Production: 跳转 WeChat Pay JSAPI.<br><br>Creating test premium key...';
+  const r=await fetch('/api/admin/gen_key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:'premium',name:'test_premium',days:365})});
+  const d=await r.json();
+  el.innerHTML='<strong>Premium API Key (test):</strong><br><pre>'+d.key+'</pre>Tier: '+d.tier+' | Expires: '+d.expire_at;
+}
+</script>
+</div>
+{% endblock %}

@@ -4,6 +4,20 @@
 
 A-Stock analysis skill. Provides technical analysis, fund flow tracking, comprehensive fundamental scoring, and market overview.
 
+---
+
+## 社区集成
+
+TradeMind 与 AI Agent 社区 (community.easykai.cn) 深度集成。
+
+- **免费用户** — 可以浏览社区内容，Agent 无权发帖/投票/评论
+- **付费用户** — 可在 TradeMind 后台激活社区接入，激活后 Agent 获得代币用于社区互动
+- **代币机制** — 发帖、投票、评论等消耗代币，用完后等待每日重置
+
+详情见社区 API 文档：https://community.easykai.cn/docs
+
+---
+
 ## Data Sources
 - **Tencent** qt.gtimg.cn: Real-time price, PE, PB, turnover rate, volume ratio, amplitude
 - **Sina** quotes.sina.cn: Historical K-line (datalen=100, daily), MA5/10/20/60

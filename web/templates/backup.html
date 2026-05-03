@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}TradeMind 本地备份{% endblock %}
+{% block nav_backup %}active{% endblock %}
+{% block style %}
+.info-box{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2);word-break:break-all}
+.info-box strong{color:var(--text)}
+.name-cell{color:var(--green);font-family:monospace;font-size:11px}
+.date-cell{color:var(--text2);font-size:11px}
+.size-cell{color:var(--text2);font-size:11px}
+.empty-state{text-align:center;padding:30px;color:#444;font-size:13px}
+.toast{position:fixed;bottom:16px;right:16px;padding:10px 16px;border-radius:8px;font-size:12px;z-index:1000;animation:slideIn .3s;max-width:360px}
+.toast.s{background:#0d1a14;border:1px solid var(--green);color:var(--green)}
+.toast.e{background:#1a0d0d;border:1px solid var(--red);color:var(--red)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.push-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.push-row label{color:var(--text2);font-size:12px;min-width:60px}
+.push-status{font-size:11px;padding:3px 8px;border-radius:4px;display:inline-block}
+.push-status.on{background:#0d1a14;color:var(--green);border:1px solid var(--green)}
+.push-status.off{background:#1a0d0d;color:var(--red);border:1px solid var(--red)}
+.toggle{position:relative;width:36px;height:20px;background:#333;border-radius:10px;cursor:pointer;transition:.2s;flex-shrink:0;display:inline-block}
+.toggle.on{background:var(--green)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s}
+.toggle.on::after{left:18px}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+<h1 style="color:var(--green);font-size:22px;margin-bottom:4px">&#x1f4e6; 本地备份</h1>
+<p class="muted" style="margin-bottom:16px;font-size:13px">Watchdog &#x81ea;&#x52a8;&#x76d1;&#x6d4b; experience.db &#x53d8;&#x5316;&#xff0c;&#x6bcf;10&#x79d2;&#x68c0;&#x6d4b;&#x4e00;&#x6b21;&#x3002;&#x53d8;&#x5316;&#x65f6;&#x81ea;&#x52a8;&#x5907;&#x4efd; + &#x63a8;&#x9001;&#x4f01;&#x4e1a;&#x5fae;&#x4fe1;&#x901a;&#x77e5;&#x3002;</p>
+
+<div class="info-box"><strong>&#x5907;&#x4efd;&#x76ee;&#x5f55;</strong> <span id="backupDir">~/.trademind-sync/backups/</span> <span class="muted" style="margin-left:8px" id="backupCount"></span></div>
+
+<!-- Push config -->
+<div class="card">
+<div class="card-title">
+<span>&#x1f4ef; &#x4f01;&#x4e1a;&#x5fae;&#x4fe1;&#x63a8;&#x9001;</span>
+<div id="pushStatusBadge"><span class="push-status off">&#x672a;&#x542f;&#x7528;</span></div>
+</div>
+<div class="muted mb-8">&#x5907;&#x4efd;&#x5b8c;&#x6210;&#x65f6;&#x81ea;&#x52a8;&#x63a8;&#x9001;&#x5230;&#x4f01;&#x4e1a;&#x5fae;&#x4fe1;&#xff0c;&#x63a5;&#x6536;&#x4eba;&#x914d;&#x7f6e;&#x5728; TradeMind &#x4e2d;&#x3002;</div>
+<div class="push-row">
+<div class="flex-center">
+<div id="pushToggle" class="toggle" onclick="togglePush()"></div>
+<span id="pushToggleLabel" class="muted" style="font-size:12px">&#x542f;&#x7528;&#x63a8;&#x9001;</span>
+</div>
+<div class="flex-center gap-4">
+<button class="btn btn-sec btn-sm" onclick="testPush()">&#x1f514; &#x6d4b;&#x8bd5;</button>
+</div>
+</div>
+<div id="pushInfo" class="muted" style="font-size:11px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)"></div>
+</div>
+
+<!-- Backup list -->
+<div class="card">
+<div class="card-title">
+<span>&#x1f4c1; &#x5907;&#x4efd;&#x5217;&#x8868;</span>
+<div class="flex-center gap-4">
+<button class="btn btn-pri btn-sm" onclick="manualBackup()">&#x1f504; &#x7acb;&#x5373;&#x5907;&#x4efd;</button>
+<button class="btn btn-sec btn-sm" onclick="load()">&#x1f504; &#x5237;&#x65b0;</button>
+</div>
+</div>
+<table><thead><tr><th>&#x6587;&#x4ef6;&#x540d;</th><th>&#x65e5;&#x671f;</th><th>&#x5927;&#x5c0f;</th><th>&#x64cd;&#x4f5c;</th></tr></thead>
+<tbody id="tableBody"><tr><td colspan="4" class="empty-state"><span class="spinner"></span> &#x52a0;&#x8f7d;&#x4e2d;...</td></tr></tbody></table>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+var pushEnabled = false;
+
+async function loadPush() {
+  try {
+    const r=await fetch('/api/push_config');const j=await r.json();
+    pushEnabled=j.enabled||false;
+    renderPushStatus(j);
+  } catch(e){}
+}
+
+function renderPushStatus(j) {
+  document.getElementById('pushStatusBadge').innerHTML='<span class="push-status '+(j.enabled?'on':'off')+'">'+(j.enabled?'&#x5df2;&#x542f;&#x7528;':'&#x672a;&#x542f;&#x7528;')+'</span>';
+  var t=document.getElementById('pushToggle');t.className='toggle'+(j.enabled?' on':'');
+  document.getElementById('pushToggleLabel').textContent=j.enabled?'&#x5df2;&#x542f;&#x7528;&#x63a8;&#x9001;':'&#x542f;&#x7528;&#x63a8;&#x9001;';
+  var info=document.getElementById('pushInfo');
+  var html='';
+  if(j.last_push) html+='&#x6700;&#x540e;&#x63a8;&#x9001;: '+new Date(j.last_push).toLocaleString('zh-CN')+'<br>';
+  if(j.last_error) html+='<span style="color:var(--red)">&#x4e0a;&#x6b21;&#x9519;&#x8bef;: '+esc(j.last_error)+'</span><br>';
+  info.innerHTML=html||'&#x5c1a;&#x672a;&#x63a8;&#x9001;&#x8fc7;';
+}
+
+async function togglePush() {
+  const r=await fetch('/api/push_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!pushEnabled})});
+  const j=await r.json();
+  pushEnabled=j.enabled||false;
+  renderPushStatus(j);
+  toast(pushEnabled?'&#x5df2;&#x542f;&#x7528;&#x63a8;&#x9001;':'&#x5df2;&#x7981;&#x7528;&#x63a8;&#x9001;','s');
+}
+
+async function testPush() {
+  var btn=event.target;btn.disabled=true;btn.textContent='&#x53d1;&#x9001;&#x4e2d;...';
+  await fetch('/api/push_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:true})});
+  const r=await fetch('/api/push_test',{method:'POST'});const j=await r.json();
+  btn.disabled=false;btn.innerHTML='&#x1f514; &#x6d4b;&#x8bd5;';
+  if(j.ok) {toast('&#x2705; &#x6d4b;&#x8bd5;&#x6d88;&#x606f;&#x5df2;&#x53d1;&#x9001;','s');loadPush();}
+  else {toast('&#x274c; &#x63a8;&#x9001;&#x5931;&#x8d25;: '+(j.error||j.reason||'&#x672a;&#x77e5;'),'e');loadPush();}
+}
+
+async function load(){
+  const r=await fetch('/api/backups');const j=await r.json();
+  document.getElementById('backupDir').textContent=j.backup_dir;
+  document.getElementById('backupCount').textContent='('+(j.backups||[]).length+' files)';
+  var all=j.backups||[];
+  if(!all.length){document.getElementById('tableBody').innerHTML='<tr><td colspan="4" class="empty-state">&#x1f4cb; &#x6682;&#x65e0;&#x5907;&#x4efd;</td></tr>';return;}
+  var html='';
+  for(const b of all){
+    html+='<tr><td class="name-cell">'+esc(b.name)+'</td><td class="date-cell">'+b.date+'</td><td class="size-cell">'+b.size_fmt+'</td>'
+      +'<td><div class="flex-center gap-4">'
+      +'<button class="btn btn-sec btn-sm" onclick="dl(\''+esc(b.name)+'\')">&#x2b07;&#xfe0f;</button>'
+      +'<button class="btn btn-pri btn-sm" onclick="rs(\''+esc(b.name)+'\')">&#x1f504; &#x56de;&#x9000;</button>'
+      +'<button class="btn btn-sec btn-sm" onclick="del(\''+esc(b.name)+'\')">&#x2716;</button>'
+      +'</div></td></tr>';
+  }
+  document.getElementById('tableBody').innerHTML=html;
+}
+
+async function manualBackup(){
+  const r=await fetch('/api/backup',{method:'POST'});const j=await r.json();
+  if(j.ok){
+    var msg='&#x2705; &#x5df2;&#x5907;&#x4efd;: '+j.name;
+    if(j.push&&j.push.ok) msg+=' (+&#x5fae;&#x4fe1;&#x5df2;&#x63a8;&#x9001;)';
+    toast(msg,'s');load();loadPush();
+  } else {toast('&#x5907;&#x4efd;&#x5931;&#x8d25;','e');}
+}
+
+async function dl(n){
+  const r=await fetch('/api/download/'+encodeURIComponent(n));
+  if(!r.ok){toast('&#x4e0b;&#x8f7d;&#x5931;&#x8d25;','e');return;}
+  const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=n;a.click();URL.revokeObjectURL(a.href);
+  toast('&#x2b07;&#xfe0f; '+n,'s');
+}
+
+async function rs(n){
+  if(!confirm('&#x56de;&#x9000;&#x5230; "'+n+'"?\n&#x5f53;&#x524d;&#x6587;&#x4ef6;&#x5c06;&#x88ab;&#x8986;&#x76d6;&#x3002;'))return;
+  const r=await fetch('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
+  const j=await r.json();
+  if(j.ok){toast('&#x2705; &#x5df2;&#x56de;&#x9000;&#x5230;: '+n,'s');load();}else{toast(j.error||'&#x5931;&#x8d25;','e');}
+}
+
+async function del(n){
+  if(!confirm('&#x5220;&#x9664; "'+n+'"?\n&#x64cd;&#x4f5c;&#x4e0d;&#x53ef;&#x64a4;&#x9500;&#x3002;'))return;
+  await fetch('/api/delete/'+encodeURIComponent(n),{method:'DELETE'});
+  toast('&#x2716; &#x5df2;&#x5220;&#x9664;','s');load();
+}
+
+load();loadPush();
+{% endblock %}

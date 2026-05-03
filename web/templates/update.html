@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}TradeMind 版本管理{% endblock %}
+{% block nav_backup %}{% endblock %}
+{% block style %}
+.version-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:14px;text-align:center}
+.version-num{font-size:36px;font-weight:700;color:var(--accent)}
+.version-label{color:var(--text2);font-size:12px;margin-top:4px}
+.version-info{display:flex;gap:12px;justify-content:center;margin:16px 0;flex-wrap:wrap}
+.version-info-item{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px}
+.version-info-item .num{font-size:18px;font-weight:600;color:var(--text)}
+.version-info-item .lbl{font-size:11px;color:var(--text2);margin-top:2px}
+.action-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.history-table{width:100%;border-collapse:collapse;font-size:12px}
+.history-table th{color:var(--text2);font-weight:400;padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;font-size:11px}
+.history-table td{padding:8px 10px;border-bottom:1px solid #161b24}
+.history-table tr:hover{background:rgba(255,255,255,0.02)}
+.tag-current{background:var(--green);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px}
+.tag-old{background:var(--card2);color:var(--text2);padding:2px 8px;border-radius:4px;font-size:10px}
+{% endblock %}
+{% block content %}
+<div class="container-narrow">
+<h1 style="color:var(--accent);font-size:22px;margin-bottom:4px">🔄 版本管理</h1>
+<p class="muted" style="margin-bottom:20px;font-size:13px">检查更新、下载源码、版本回退</p>
+
+<div class="version-card">
+  <div class="version-num" id="currentVersion">--</div>
+  <div class="version-label">当前版本</div>
+  <div class="version-info" id="versionInfo">
+    <div class="version-info-item"><div class="num" id="latestVersion">--</div><div class="lbl">最新版本</div></div>
+    <div class="version-info-item"><div class="num" id="commitCount">--</div><div class="lbl">提交数</div></div>
+    <div class="version-info-item"><div class="num" id="statusIcon">--</div><div class="lbl">状态</div></div>
+  </div>
+  <div class="action-row">
+    <button class="btn btn-pri" onclick="checkUpdate()">🔍 检查更新</button>
+    <button class="btn btn-sec" onclick="downloadSrc()">📦 下载源码</button>
+    <button class="btn btn-green" onclick="applyUpdate()" id="updateBtn" style="display:none">⬆️ 执行更新</button>
+    <button class="btn btn-sec" onclick="rollbackVer()">⏪ 回退</button>
+  </div>
+  <div id="updateLog" class="muted" style="font-size:11px;margin-top:12px;padding:8px;background:var(--card2);border-radius:6px;display:none"></div>
+</div>
+
+<div class="card">
+<div class="card-title">📋 版本历史</div>
+<table class="history-table">
+<thead><tr><th>版本</th><th>日期</th><th>说明</th></tr></thead>
+<tbody id="historyBody"><tr><td colspan="3" class="empty-state" style="text-align:center;padding:20px;color:#444">加载中...</td></tr></tbody>
+</table>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+async function checkUpdate() {
+  const btn=event.target;btn.disabled=true;btn.textContent='检查中...';
+  try {
+    const r=await fetch('/api/update/check');const j=await r.json();
+    document.getElementById('currentVersion').textContent=j.current||'--';
+    document.getElementById('latestVersion').textContent=j.latest||'--';
+    document.getElementById('commitCount').textContent='--';
+    const icon=document.getElementById('statusIcon');
+    if(j.has_update){icon.innerHTML='⬆️';icon.style.color='var(--green)';
+      document.getElementById('updateBtn').style.display='';showLog('发现新版本 v'+j.latest+', 建议更新');}
+    else{icon.innerHTML='✅';icon.style.color='var(--green)';
+      showLog('已是最新版本 v'+j.current);}
+    if(j.error) showLog('⚠️ '+j.error,'e');
+  } catch(e){showLog('❌ 检查失败: '+e.message,'e');}
+  btn.disabled=false;btn.textContent='🔍 检查更新';
+}
+
+async function applyUpdate() {
+  if(!confirm('执行 git pull 更新?\n本地修改将自动 stash。'))return;
+  const btn=event.target;btn.disabled=true;btn.textContent='更新中...';
+  try {
+    const r=await fetch('/api/update/apply',{method:'POST'});const j=await r.json();
+    if(j.ok){showLog('✅ 更新成功: '+j.output.substring(0,200),'s');checkUpdate();}
+    else showLog('❌ 更新失败: '+j.error,'e');
+  } catch(e){showLog('❌ '+e.message,'e');}
+  btn.disabled=false;btn.textContent='⬆️ 执行更新';
+}
+
+async function downloadSrc() {
+  const btn=event.target;btn.disabled=true;btn.textContent='下载中...';
+  try {
+    const r=await fetch('/api/update/download');
+    if(!r.ok){showLog('❌ 下载失败','e');btn.disabled=false;btn.innerHTML='📦 下载源码';return;}
+    const blob=await r.blob();
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='TradeMind-source.zip';a.click();
+    URL.revokeObjectURL(a.href);
+    showLog('✅ 源码已下载','s');
+  } catch(e){showLog('❌ '+e.message,'e');}
+  btn.disabled=false;btn.innerHTML='📦 下载源码';
+}
+
+async function rollbackVer() {
+  const v=prompt('输入要回退到的版本号 (留空回退到上一版本):');
+  const btn=event.target;btn.disabled=true;btn.textContent='回退中...';
+  try {
+    const r=await fetch('/api/update/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:v||''})});
+    const j=await r.json();
+    if(j.ok)showLog('✅ 已回退到 v'+j.version,'s');
+    else showLog('❌ 回退失败: '+j.error,'e');
+  } catch(e){showLog('❌ '+e.message,'e');}
+  btn.disabled=false;btn.innerHTML='⏪ 回退';
+}
+
+function showLog(msg,type){
+  const el=document.getElementById('updateLog');
+  el.style.display='';el.innerHTML=msg;
+  el.style.color=type==='e'?'var(--red)':type==='s'?'var(--green)':'var(--text2)';
+}
+
+// Load initial version
+(async function(){
+  try{const r=await fetch('/api/update/check');const j=await r.json();
+  document.getElementById('currentVersion').textContent=j.current||'--';
+  document.getElementById('statusIcon').innerHTML='❓';}catch(e){}
+})();
+{% endblock %}
