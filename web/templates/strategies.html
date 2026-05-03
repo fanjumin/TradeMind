@@ -1,10 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TradeMind — 策略市场</title>
-    <style>
+{% extends "base.html" %}
+{% block title %}TradeMind — 策略市场{% endblock %}
+{% block nav_strategies %}active{% endblock %}
+{% block style %}
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
         h1 { color: #58a6ff; margin-bottom: 8px; }
@@ -30,10 +28,11 @@
         .tag { font-size: 11px; background: #21262d; color: #8b949e; padding: 2px 6px; border-radius: 4px; }
         .params { font-size: 11px; color: #484f58; font-family: monospace; }
         .loading { text-align: center; color: #8b949e; padding: 40px; }
-    </style>
-</head>
-<body>
-    <h1>📊 TradeMind 策略市场</h1>
+    
+{% endblock %}
+{% block content %}
+<div class="container">
+<h1>📊 TradeMind 策略市场</h1>
     <p class="subtitle">9 个策略 · 5 大类别 · 趋势/动量/均值回归/量价/组合</p>
     
     <div class="filters">
@@ -109,5 +108,67 @@
         
         loadStrategies();
     </script>
-</body>
-</html>
+</div>
+{% endblock %}
+{% block scripts %}
+
+        async function loadStrategies() {
+            try {
+                const resp = await fetch('/api/v1/strategies', {headers: {'X-API-Key': 'tm-562d9a355715c1fea132d4c0f9d55afb'}});
+                const data = await resp.json();
+                window.allStrategies = data.data.strategies;
+                renderStrategies(window.allStrategies);
+            } catch(e) {
+                document.getElementById('strategy-grid').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
+            }
+        }
+        
+        function riskBadge(level) {
+            const cls = 'badge badge-risk-' + level;
+            const labels = {low: '🟢 低风险', medium: '🟡 中风险', high: '🔴 高风险'};
+            return '<span class="' + cls + '">' + (labels[level] || level) + '</span>';
+        }
+        
+        function catLabel(cat) {
+            const labels = {trend: '趋势跟踪', momentum: '动量', mean_reversion: '均值回归', volume: '量价', combined: '组合策略'};
+            return labels[cat] || cat;
+        }
+        
+        function tfLabel(tf) {
+            const labels = {day: '日内', swing: '波段', position: '中长线'};
+            return labels[tf] || tf;
+        }
+        
+        function renderStrategies(strategies) {
+            const grid = document.getElementById('strategy-grid');
+            grid.innerHTML = strategies.map(s => `
+                <div class="card" data-category="${s.category}">
+                    <div class="card-header">
+                        <span class="card-name">${s.name}</span>
+                        <span class="card-key">${s.key}</span>
+                    </div>
+                    <div class="badges">
+                        <span class="badge badge-cat">${catLabel(s.category)}</span>
+                        ${riskBadge(s.risk_level)}
+                        <span class="badge badge-tf">⏱ ${tfLabel(s.timeframe)}</span>
+                    </div>
+                    <div class="card-desc">${s.description}</div>
+                    <div class="tags">${(s.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                    ${s.default_params && Object.keys(s.default_params).length > 0 ? 
+                        '<div class="params">⚙ ' + JSON.stringify(s.default_params) + '</div>' : ''}
+                </div>
+            `).join('');
+        }
+        
+        function filter(cat) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(c => {
+                c.style.display = (cat === 'all' || c.dataset.category === cat) ? '' : 'none';
+            });
+        }
+        
+        loadStrategies();
+    
+{% endblock %}

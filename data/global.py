@@ -109,10 +109,10 @@ def get_global_indices():
 
         results = {}
         for i, line in enumerate(lines):
-            if "=" not in line or """ not in line:
+            if "=" not in line or '"' not in line:
                 continue
 
-            data = line.split("=", 1)[1].strip().strip(";").strip(""")
+            data = line.split("=", 1)[1].strip().strip(";").strip('"')
             if not data:
                 continue
 

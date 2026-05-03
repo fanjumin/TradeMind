@@ -13,11 +13,11 @@ def morning_report():
         indices = get_all_indices_status()
         if indices:
             lines.append('Market:')
-            for idx in indices[:4]:
+            for idx in list(indices.values())[:4]:
                 n = idx.get('name','?')
                 c = idx.get('change_pct', 0)
                 lines.append('  ' + n + ': ' + format(c, '+.2f') + '%')
-    except:
+    except Exception:
         lines.append('Market: data unavailable')
     lines.append('')
     try:
@@ -36,11 +36,11 @@ def evening_report():
         indices = get_all_indices_status()
         if indices:
             lines.append('Market Close:')
-            for idx in indices[:4]:
+            for idx in list(indices.values())[:4]:
                 n = idx.get('name','?')
                 c = idx.get('change_pct', 0)
                 lines.append('  ' + n + ': ' + format(c, '+.2f') + '%')
-    except:
+    except Exception:
         pass
     lines.append('')
     try:
@@ -59,7 +59,7 @@ def evening_report():
             lines.append('Top Losers:')
             for s in losers:
                 lines.append('  ' + s['name'] + '(' + s['code'] + ') ' + str(round(s['change_pct'],1)) + '% Score:' + str(s['score']))
-    except:
+    except Exception:
         pass
     lines.append('')
     lines.append('Tomorrow: --daily for morning scan')

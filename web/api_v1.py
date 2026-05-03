@@ -95,7 +95,7 @@ def api_root():
     """API root — list available endpoints."""
     return api_response(data={
         "name": "TradeMind API v1",
-        "version": "1.0.0",
+        "version": "0.1.0",
         "docs": "/api/docs",
         "openapi": "/api/openapi.json",
         "endpoints": {
@@ -116,7 +116,7 @@ def api_root():
 @api_v1.route('/health')
 def api_health():
     """Health check — no auth required."""
-    return api_response(data={"status": "ok", "version": "1.0.0"})
+    return api_response(data={"status": "ok", "version": "0.1.0"})
 
 @api_v1.route('/stats')
 @require_api_key
@@ -876,7 +876,7 @@ OPENAPI_SPEC = {
     "openapi": "3.0.3",
     "info": {
         "title": "TradeMind REST API",
-        "version": "1.0.0",
+        "version": "0.1.0",
         "description": "A股AI分析平台 REST API — 对标 OpenBB Terminal. "
                        "提供实时行情/技术分析/基本面/情绪分析/ML预测/回测/选股/告警等全功能接口。",
         "contact": {"name": "TradeMind"}

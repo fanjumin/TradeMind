@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}API Documentation — TradeMind{% endblock %}
+{% block nav_docs %}active{% endblock %}
+{% block style %}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;line-height:1.6}
+.nav{display:flex;justify-content:center;gap:24px;padding:20px;font-size:14px}
+.nav a{color:#8b949e;text-decoration:none}
+.nav a:hover{color:#58a6ff}
+.container{max-width:900px;margin:0 auto;padding:20px}
+h1{color:#58a6ff;font-size:32px;margin-bottom:8px}
+h2{color:#f0f6fc;font-size:22px;margin:30px 0 12px;padding-bottom:8px;border-bottom:1px solid #21262d}
+h3{color:#f0f6fc;font-size:16px;margin:16px 0 8px}
+code{background:#1f2937;padding:2px 6px;border-radius:4px;font-size:13px;color:#f0f6fc}
+pre{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;overflow-x:auto;font-size:13px;margin:8px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;margin-right:6px}
+.tag-free{background:#1f6feb33;color:#58a6ff;border:1px solid #1f6feb}
+.tag-premium{background:#9e6a0333;color:#d29922;border:1px solid #9e6a03}
+.endpoint{margin:16px 0;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.endpoint .method{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:700;font-size:13px;margin-right:8px}
+.method-get{background:#1f6feb33;color:#58a6ff}
+.method-post{background:#3fb95033;color:#3fb950}
+.endpoint .path{font-family:monospace;font-size:14px;color:#f0f6fc}
+.endpoint .desc{color:#8b949e;font-size:14px;margin:6px 0}
+.endpoint .params{margin:8px 0;font-size:13px;color:#8b949e}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #21262d}
+th{color:#8b949e;font-weight:600}
+.footer{text-align:center;padding:30px;color:#484f58;font-size:13px;margin-top:40px}
+
+{% endblock %}
+{% block content %}
+<div class="container-narrow">
+<div class="nav">
+<a href="/">首页</a><a href="/subscribe">订阅</a><a href="/docs">API文档</a><a href="/tutorial">教程</a><a href="/contact">联系客服</a>
+</div>
+<div class="container">
+<h1>API Documentation</h1>
+<p style="color:#8b949e;margin-bottom:20px">TradeMind API v2 — 所有端点需携带 API Key（Free 或 Premium）</p>
+
+<h2>Authentication</h2>
+<p>在请求头中添加 <code>X-API-Key: YOUR_KEY</code> 或 URL 参数 <code>?api_key=YOUR_KEY</code>。</p>
+<pre>curl -H "X-API-Key: tm-xxxxxxxxxxxxxxxx" https://easykai.cn/api/v2/stock/600519/full</pre>
+
+<h2>Endpoints</h2>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/stock/&lt;symbol&gt;/quote</span><span class="tag tag-free">Free</span></div>
+<div class="desc">获取个股实时行情（最新价、涨跌幅、PE/PB、市值、换手率）</div>
+<div class="params">参数: symbol — 股票代码（如 600519, 000001）</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/stock/600519/quote</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/stock/&lt;symbol&gt;/full</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">个股深度分析 — 行情 + 技术指标 + 趋势研判</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/stock/600519/full</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/backtest/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">策略回测 — 支持 10+ 内置策略</div>
+<div class="params">参数: strategy (默认 macd), days (默认 252)</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" "https://easykai.cn/api/v2/backtest/600519?strategy=macd&days=252"</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/strategies/compare/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">多策略对比 — 同一标的下各策略表现排名</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/strategies/compare/600519</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/etf/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">ETF 实时行情</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/etf/510050</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/cb/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">可转债实时行情</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/cb/110044</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/scan</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">今日市场信号扫描 — 全市场 Top N 关注股票</div>
+<div class="params">参数: top (默认 8)</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" "https://easykai.cn/api/v2/scan?top=5"</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/financials/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">个股基本面分析 — 三表 + 评分</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/financials/600519</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/alerts</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">异动扫描 — 5种散户关注信号（放量突破/超跌反弹/涨停/巨量/深度价值）</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/alerts</pre>
+</div>
+
+<div class="endpoint">
+<div><span class="method method-get">GET</span><span class="path">/api/v2/ask/&lt;symbol&gt;</span><span class="tag tag-premium">Premium</span></div>
+<div class="desc">LLM AI 分析 — DeepSeek 驱动，多维度投资研判</div>
+<pre>curl -H "X-API-Key: YOUR_KEY" https://easykai.cn/api/v2/ask/600519</pre>
+</div>
+
+<h2>Response Format</h2>
+<pre>{
+  "success": true,
+  "timestamp": "2026-04-28T14:00:00",
+  "data": {
+    ...
+  }
+}</pre>
+<p style="color:#8b949e;font-size:14px">错误时返回: <code>{"success": false, "error": "message", "timestamp": "..."}</code></p>
+
+</div>
+<div class="footer"><a href="/">← 返回首页</a></div>
+</div>
+{% endblock %}

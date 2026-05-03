@@ -28,6 +28,7 @@ venv/
 .idea/
 *.swp
 .DS_Store
+.DS_Store?
 
 # Charts output
 charts/*.html
@@ -35,3 +36,14 @@ charts/*.html
 # Session notes
 SESSION_SUMMARY.md
 PHASE2_PLAN.md
+DEPLOYMENT_PLAN.md
+GAP_ANALYSIS*.md
+
+# Database files
+*.db
+
+# Backup data
+.trademind-sync/
+
+# Hermes plans
+.hermes/

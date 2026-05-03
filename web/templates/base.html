@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}TradeMind{% endblock %}</title>
+{% block head_extra %}{% endblock %}
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0e17;
+  --card: #131722;
+  --card2: #1a1f2e;
+  --border: #2a2e39;
+  --text: #d1d4dc;
+  --text2: #787b86;
+  --green: #26a69a;
+  --red: #ef5350;
+  --accent: #2962ff;
+  --accent2: #5e7ce0;
+}
+body { background: var(--bg); color: var(--text); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: #1a1f2e; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 8px; }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.logo { font-size: 18px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.logo span { color: var(--text); font-weight: 300; font-size: 12px; margin-left: 6px; }
+.nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav-btn { padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text2); background: transparent; border: 1px solid transparent; transition: all 0.2s; text-decoration: none; white-space: nowrap; }
+.nav-btn:hover { color: var(--text); border-color: var(--accent); text-decoration: none; }
+.nav-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.nav-group { font-size: 10px; color: var(--text2); padding: 0 4px; display: flex; align-items: center; opacity: 0.5; }
+.search-box { display: flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; }
+.search-box input { background: transparent; border: none; color: var(--text); outline: none; width: 150px; font-size: 12px; }
+.search-box input::placeholder { color: var(--text2); }
+.clock { color: var(--text2); font-size: 12px; font-family: monospace; white-space: nowrap; }
+.container { max-width: 1400px; margin: 0 auto; padding: 16px 20px; }
+.container-narrow { max-width: 900px; margin: 0 auto; padding: 20px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.card-title { color: var(--text); font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 6px; border: none; font-size: 12px; cursor: pointer; transition: 0.15s; text-decoration: none; white-space: nowrap; }
+.btn-pri { background: var(--accent); color: #fff; }
+.btn-pri:hover { background: #1a53e0; text-decoration: none; }
+.btn-sec { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+.btn-sec:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.btn-green { background: var(--green); color: #fff; }
+.btn-red { background: var(--red); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { color: var(--text2); font-weight: 400; padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 11px; white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid #161b24; }
+tr:hover { background: rgba(255,255,255,0.02); }
+input, select, textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 13px; outline: none; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+label { color: var(--text2); font-size: 12px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+.tab { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text2); background: transparent; transition: 0.15s; }
+.tab:hover { color: var(--text); border-color: var(--accent); }
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 280px; }
+.tag { font-size: 11px; background: var(--card2); color: var(--text2); padding: 2px 6px; border-radius: 4px; display: inline-block; }
+.tag-green { background: var(--green); color: #fff; }
+.tag-red { background: var(--red); color: #fff; }
+.up { color: var(--green); }
+.down { color: var(--red); }
+.muted { color: var(--text2); }
+.toast { position: fixed; bottom: 16px; right: 16px; padding: 10px 16px; border-radius: 8px; font-size: 12px; z-index: 1000; animation: slideIn 0.3s; max-width: 360px; }
+.toast.s { background: #0d1a14; border: 1px solid var(--green); color: var(--green); }
+.toast.e { background: #1a0d0d; border: 1px solid var(--red); color: var(--red); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.footer { text-align: center; padding: 20px; color: var(--text2); font-size: 11px; border-top: 1px solid var(--border); margin-top: 40px; }
+@media (max-width: 768px) { .header { padding: 8px 12px; } .nav-btn { padding: 4px 8px; font-size: 11px; } .container { padding: 12px; } .col { min-width: 100%; } .search-box input { width: 100px; } }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.text-center { text-align: center; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.flex { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-center { display: flex; align-items: center; gap: 8px; }
+.gap-4 { gap: 4px; }
+.gap-8 { gap: 8px; }
+.hidden { display: none; }
+</style>
+{% block style %}{% endblock %}
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <a href="/" class="logo">TradeMind <span>A-Stock</span></a>
+    <div class="nav-links">
+      <a href="/" class="nav-btn {% block nav_dashboard %}{% endblock %}">大盘</a>
+      <a href="/analyze" class="nav-btn {% block nav_analyze %}{% endblock %}">分析</a>
+      <a href="/strategies" class="nav-btn {% block nav_strategies %}{% endblock %}">策略</a>
+      <a href="/trade" class="nav-btn {% block nav_trade %}{% endblock %}">交易</a>
+      <span class="nav-group">|</span>
+      <a href="/about" class="nav-btn {% block nav_about %}{% endblock %}">关于</a>
+      <a href="/subscribe" class="nav-btn {% block nav_subscribe %}{% endblock %}">订阅</a>
+      <a href="/docs" class="nav-btn {% block nav_docs %}{% endblock %}">文档</a>
+      <a href="/tutorial" class="nav-btn {% block nav_tutorial %}{% endblock %}">教程</a>
+      <a href="/contact" class="nav-btn {% block nav_contact %}{% endblock %}">联系</a>
+      <span class="nav-group">|</span>
+      <a href="/backup" class="nav-btn {% block nav_backup %}{% endblock %}">备份</a>
+      <a href="/update" class="nav-btn {% block nav_update %}{% endblock %}">版本</a>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="search-box">
+      <input type="text" id="globalSearch" placeholder="搜索股票..." onkeydown="if(event.key==='Enter'){var v=this.value.trim().toUpperCase();if(v)window.location.href='/analyze?q='+encodeURIComponent(v)}">
+    </div>
+    <div class="clock" id="clock"></div>
+  </div>
+</div>
+
+{% block content %}{% endblock %}
+
+<div class="footer">
+  TradeMind &mdash; A-Stock Analysis Tool &bull; 数据来源: Sina Finance &bull; 仅供学习参考
+</div>
+
+<script>
+function toast(m,t){const d=document.createElement('div');d.className='toast '+(t||'s');d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),3000);}
+function updateClock(){const c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('zh-CN',{hour12:false});}
+setInterval(updateClock,1000);updateClock();
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function fmtNum(n){if(n==null||isNaN(n))return'--';return n.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+{% block scripts %}{% endblock %}
+</script>
+</body>
+</html>
