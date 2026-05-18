@@ -311,6 +311,78 @@ def api_screener_scan():
     return jsonify(safe_json(result))
 
 
+@app.route('/api/skills/alpha-evol')
+def api_alpha_evol():
+    """Aggregate existing analysis and return Alpha Evol friendly JSON"""
+    symbol = request.args.get('symbol', '').upper()
+    if not symbol:
+        return jsonify({'error': 'Missing symbol parameter'}), 400
+    try:
+        info = get_latest_price(symbol)
+        df = get_price_data(symbol, datalen=120)
+
+        kline = []
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                d = row.name
+                ds = d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10]
+                kline.append({
+                    'time': ds,
+                    'open': float(row['open']),
+                    'high': float(row['high']),
+                    'low': float(row['low']),
+                    'close': float(row['close']),
+                    'volume': float(row.get('volume', 0)),
+                })
+
+        trend = get_trend(df)
+        indicators = fetch_indicators(df)
+
+        basic = get_basic_info(symbol)
+        basic_score, _ = get_basic_score(basic)
+
+        sentiment = {}
+        try:
+            sentiment = get_sentiment_for_stock(symbol) or {}
+        except:
+            sentiment = {}
+
+        # Compose scores (example mapping, adjust per real logic)
+        ability_scores = {
+            'technical': min(1, max(0, (indicators.get('momentum', 0) if isinstance(indicators, dict) else 0.5))),
+            'fundamental': min(1, max(0, (basic_score / 10) if isinstance(basic_score, (int, float)) else 0.3)),
+            'sentiment': min(1, max(0, (sentiment.get('score', 0) if isinstance(sentiment, dict) else 0.2))),
+            'risk_control': 0.5,
+            'execution': 0.4,
+        }
+
+        score = get_score(trend, 0, basic_score, indicators)
+        signal = get_signal(score)
+
+        evolution_log = [
+            {'ts': datetime.utcnow().isoformat(), 'note': f'自动分析：score {round(score,2)}', 'delta': {'technical': 0.01}}
+        ]
+
+        result = {
+            'level': 1,
+            'exp': 12,
+            'exp_next': 100,
+            'ability_scores': ability_scores,
+            'evolution_log': evolution_log,
+            'analysis': {
+                'symbol': symbol,
+                'title': f"{info.get('name', symbol)} · 快速分析",
+                'summary': f"信号: {signal}；趋势: {trend.get('summary','-') if isinstance(trend, dict) else trend}",
+                'buy_signals': [{'type': 'signal', 'price': info.get('price', 0), 'prob': 0.6}] if info else [],
+                'sell_signals': [],
+            },
+            'kline': kline,
+        }
+        return jsonify(safe_json(result))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================
 # WeCom Alert APIs
 # ============================================================
@@ -793,6 +865,18 @@ def api_predict_llm(symbol):
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/skills/alpha-evol')
+def skills_alpha_evol():
+    """Serve the Alpha Evol static template for visualization."""
+    try:
+        path = os.path.join(os.path.dirname(__file__), 'platform', 'templates', 'skills', 'alpha-evol.html')
+        if os.path.exists(path):
+            return open(path, 'r', encoding='utf-8').read()
+        return "Alpha Evol template not found", 404
+    except Exception as e:
+        return f"Error: {e}", 500
 
 
 @app.route("/api/sentiment-social/<symbol>")
