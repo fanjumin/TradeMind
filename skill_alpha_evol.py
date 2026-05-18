@@ -78,6 +78,19 @@ class AlphaEvolSkill:
             score = get_score(trend, fund_total, basic_score, indicators)
             signal = get_signal(score)
             
+            # Prepare K-line data for frontend (last 30 days)
+            kline_df = get_price_data(symbol, days=30)
+            kline = []
+            for _, row in kline_df.iterrows():
+                # Assuming row has: datetime, open, high, low, close, volume
+                # Convert timestamp to string or milliseconds
+                time_val = row['datetime']
+                if hasattr(time_val, 'strftime'):
+                    time_str = time_val.strftime('%Y-%m-%d')
+                else:
+                    time_str = str(time_val)
+                kline.append([time_str, float(row['open']), float(row['high']), float(row['low']), float(row['close'])])
+            
             # Sentiment analysis
             sentiment = get_social_sentiment(symbol)
             sentiment_score = sentiment.get("score", 0.5)
@@ -126,7 +139,8 @@ class AlphaEvolSkill:
                 "summary": f"{basic.get('name', symbol)}：{get_signal_cn(signal)}，价格{latest.get('close', 0):.2f}",
                 "key_points": basic_reasons[:3],
                 "buy_point": {"price": levels["support"], "reason": "支撑位反弹"} if levels["support"] else {"price": 0, "reason": "-"},
-                "sell_point": {"price": levels["resistance"], "reason": "前高阻力"} if levels["resistance"] else {"price": 0, "reason": "-"}
+                "sell_point": {"price": levels["resistance"], "reason": "前高阻力"} if levels["resistance"] else {"price": 0, "reason": "-"},
+                "kline": kline
             }
             
             return {

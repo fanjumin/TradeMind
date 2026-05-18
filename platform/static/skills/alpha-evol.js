@@ -65,16 +65,40 @@
     });
   }
 
-  function renderAnalysis(analysis){
-    const s=document.getElementById('ae-analysis-summary'); if(s) s.textContent=analysis.summary||'';
-    const signals=document.getElementById('ae-signals'); if(signals){
-      signals.innerHTML=''; (analysis.signals||[]).forEach(sig=>{
-        const el=document.createElement('div'); el.className='p-2 rounded mt-2 bg-[rgba(255,255,255,0.01)] text-sm';
-        el.innerHTML=`<strong class="text-neon">${sig.type.toUpperCase()}</strong> ${sig.price || ''} <span class="text-xs text-slate-400">${sig.time||''}</span><div class="text-xs text-slate-300">${sig.note||''}</div>`;
-        signals.appendChild(el);
-      });
-    }
-  }
+   function renderAnalysis(analysis){
+     const s=document.getElementById('ae-analysis-summary'); if(s) s.textContent=analysis.summary||'';
+     const signals=document.getElementById('ae-signals'); if(signals){
+       signals.innerHTML=''; (analysis.signals||[]).forEach(sig=>{
+         const el=document.createElement('div'); el.className='p-2 rounded mt-2 bg-[rgba(255,255,255,0.01)] text-sm';
+         el.innerHTML=`<strong class="text-neon">${sig.type.toUpperCase()}</strong> ${sig.price || ''} <span class="text-xs text-slate-400">${sig.time||''}</span><div class="text-xs text-slate-300">${sig.note||''}</div>`;
+         signals.appendChild(el);
+       });
+     }
+     // Render K-line if data provided
+     if(analysis.kline && analysis.kline.length > 0){
+       const klineEl = document.getElementById('ae-kline');
+       if(klineEl){
+         // Try to use existing global chart update function
+         try{
+           if(window.updateChart && typeof window.updateChart==='function'){
+             window.updateChart(analysis.kline);
+             return;
+           }
+         }catch(e){}
+         // Fallback: render simple ECharts candlestick
+         const chart = echarts.init(klineEl);
+         const dates = analysis.kline.map(d=>d[0]);
+         const ohlc = analysis.kline.map(d=>[d[1],d[2],d[3],d[4]]); // [open,high,low,close]
+         const option = {
+           grid:{left:40,right:10,top:10,bottom:30},
+           xAxis:{type:'category',data:dates,boundaryGap:false,axisLine:{lineStyle:{color:'#223'}}},
+           yAxis:{scale:true,axisLine:{lineStyle:{color:'#223'}}},
+           series:[{type:'candlestick',data:ohlc,itemStyle:{color:'#00ff9f',color0:'#ff5c7a',borderColor:'#00ff9f',borderColor0:'#ff5c7a'}}]
+         };
+         chart.setOption(option);
+       }
+     }
+   }
 
   function renderExp(level,exp,exp_to_next,gain){
     const lvl=document.getElementById('ae-level'); if(lvl) lvl.textContent=`Lv. ${level}`;
