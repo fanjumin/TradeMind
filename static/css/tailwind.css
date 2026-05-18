@@ -1,0 +1,105 @@
+/* Custom Tailwind-like CSS for TradeMind */
+:root {
+  --bg: #071026;
+  --card: #0f172a;
+  --text: #e2e8f0;
+  --text-slate-300: #cbd5e1;
+  --text-slate-400: #94a3b8;
+  --text-slate-200: #e2e8f0;
+  --neon-gradient: linear-gradient(90deg, #00f6ff, #7c4dff, #00ffa3);
+  --neon-green: #7efc9a;
+  --glass-bg: rgba(255,255,255,0.03);
+  --border-glass: rgba(124,77,255,0.12);
+  --shadow-glass: 0 6px 30px rgba(2,6,23,0.6);
+}
+
+/* Base */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.text-white { color: #fff; }
+.text-slate-200 { color: var(--text-slate-200); }
+.text-slate-300 { color: var(--text-slate-300); }
+.text-slate-400 { color: var(--text-slate-400); }
+.font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.font-semibold { font-weight: 600; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-center { text-align: center; }
+.neon-gradient { background: var(--neon-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.neon-green { color: var(--neon-green); }
+
+/* Layout */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.flex-1 { flex: 1 1 0%; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.max-w-6xl { max-width: 72rem; }
+.w-full { width: 100%; }
+.w-64 { width: 16rem; }
+.h-64 { height: 16rem; }
+.h-4 { height: 1rem; }
+.h-48 { height: 12rem; }
+.inset-0 { inset: 0; }
+.absolute { position: absolute; }
+.relative { position: relative; }
+.mb-4 { margin-bottom: 1rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.overflow-auto { overflow: auto; }
+.overflow-hidden { overflow: hidden; }
+.max-h-36 { max-height: 9rem; }
+
+/* Glass effect */
+.glass-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: 0.75rem; /* rounded-xl */
+}
+
+/* Gradient bars */
+.bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-stops)); }
+.from-[#00f6ff] { --tw-gradient-from: #00f6ff var(--tw-gradient-from-position); --tw-gradient-to: rgb(0 246 255 / 0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.via-[#7c4dff] { --tw-gradient-via: #7c4dff var(--tw-gradient-via-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+.to-[#00ffa3] { --tw-gradient-to: #00ffa3 var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
+/* Rounded */
+.rounded-full { border-radius: 9999px; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-xl { border-radius: 0.75rem; }
+
+/* Transitions */
+.transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+
+/* Avatar image */
+.object-contain { object-fit: contain; }
+
+/* Space */
+.space-y-2 > :not([hidden])~:not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.5rem * var(--tw-space-y-reverse)); }
+
+/* Scrollbar */
+#ae-log::-webkit-scrollbar { width: 6px; height: 6px; }
+#ae-log::-webkit-scrollbar-thumb { background: var(--neon-gradient); border-radius: 6px; }
+
+/* Ensure min heights */
+#ae-radar { min-height: 260px; }
+#ae-kline { min-height: 160px; }
+
+/* Dark mode adjustments */
+.dark { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }
